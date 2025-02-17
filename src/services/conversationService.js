@@ -23,7 +23,8 @@ const bufferTimeouts = new Map();
 
 /**
  * Processa as mensagens do usuário, enviando-as ao OpenAI e retornando
- * a resposta final do assistente via Z-API. Agora com logs adicionais.
+ * a resposta final do assistente via Z-API.
+ * Converte **texto** em *texto* para exibir negrito no WhatsApp.
  *
  * @param {string} userId - Identificador único do usuário (chatLid, etc.)
  * @param {string} phone - Número de telefone para resposta via Z-API
@@ -33,6 +34,7 @@ const bufferTimeouts = new Map();
  */
 export async function getChat(userId, phone, message, imageUrl, caption = '') {
   try {
+    // Se não houver userId ou mensagem/imagem, lança erro
     if (!userId || (!message && !imageUrl)) {
       throw new Error('userId e message ou imageUrl são obrigatórios');
     }
@@ -54,7 +56,7 @@ export async function getChat(userId, phone, message, imageUrl, caption = '') {
       clearTimeout(bufferTimeouts.get(userId));
     }
 
-    // Agenda o processamento das mensagens após 4 segundos
+    // Agenda o processamento das mensagens após 10 segundos
     bufferTimeouts.set(userId, setTimeout(async () => {
       const bufferedMessages = messageBuffers.get(userId);
       messageBuffers.delete(userId);
@@ -85,11 +87,11 @@ export async function getChat(userId, phone, message, imageUrl, caption = '') {
         const totalTokens = await getTokenUsage(threadId);
         if (totalTokens > 200000) {
           const summarizedContext = await summarizeContext(threadId);
-          const thread = await createThread(
+          const newThread = await createThread(
             userId,
             'Esta é uma continuação da conversa anterior. Contexto resumido:'
           );
-          threadId = thread.id;
+          threadId = newThread.id;
           await redisClient.set(`threadId:${userId}`, threadId);
           await addMessageWithRetry(threadId, summarizedContext);
         }
@@ -102,10 +104,16 @@ export async function getChat(userId, phone, message, imageUrl, caption = '') {
 
           // Verifica comando de apagar thread
           if (formattedMessage.toLowerCase().includes('apagar thread_id')) {
+            // Apaga o thread do Redis
             await handleDeleteThread(userId);
-            return;
+
+            // Envia mensagem de confirmação ao usuário
+            await sendReplyZAPI(phone, "Thread apagado com sucesso!");
+
+            return; // Sai da função após apagar e confirmar
           }
 
+          // Se não for "apagar thread_id", segue o fluxo normal
           await storeMessageInConversation(userId, threadId, {
             role: 'user',
             content: formattedMessage,
@@ -113,6 +121,7 @@ export async function getChat(userId, phone, message, imageUrl, caption = '') {
           });
 
           await addMessageWithRetry(threadId, formattedMessage);
+
         } else if (item.type === 'image') {
           try {
             const description = await processImage(item.imageUrl, item.caption);
@@ -152,14 +161,12 @@ export async function getChat(userId, phone, message, imageUrl, caption = '') {
         throw new Error('Nenhuma mensagem do assistente encontrada.');
       }
 
-      // LOGA o objeto completo da última mensagem do assistente
       console.log("assistantMessage:", JSON.stringify(assistantMessage, null, 2));
+      let assistantResponse = assistantMessage.content[0].text.value;
+      console.log("assistantResponse (bruto):", assistantResponse);
 
-      // Extrai o texto do assistente
-      const assistantResponse = assistantMessage.content[0].text.value;
-
-      // LOGA o texto final que será enviado
-      console.log("assistantResponse:", assistantResponse);
+      // Converte **texto** em *texto* para exibir negrito no WhatsApp
+      assistantResponse = assistantResponse.replace(/\*\*(.*?)\*\*/g, '*$1*');
 
       // Armazena a resposta no histórico
       await storeMessageInConversation(userId, threadId, {
@@ -171,7 +178,7 @@ export async function getChat(userId, phone, message, imageUrl, caption = '') {
       // Envia a resposta via Z-API
       await sendReplyZAPI(phone, assistantResponse);
 
-    }, 4000));
+    }, 10000));
   } catch (error) {
     console.error('Erro no getChat:', error);
     throw error;
