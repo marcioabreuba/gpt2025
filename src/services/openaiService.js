@@ -1,10 +1,9 @@
-// src/services/openaiService.js
-
 import OpenAI from "openai";
 import moment from "moment-timezone";
 import config from "../config.js";
 import redisClient from "../redisClient.js";
-import { get_products_info } from "../services/shopifyService.js"; // Importa a função
+import { get_products_info } from "../services/shopifyService.js";
+import { getOrdersInfo } from "../services/shopifyOrdersService.js"; // Import correto
 
 // Cria a instância do OpenAI com a API Key
 const openai = new OpenAI({
@@ -27,7 +26,6 @@ export function getTimeBasedGreeting() {
 
 /**
  * Cria um novo thread no OpenAI, recebendo userId e uma mensagem inicial.
- * Ajuste se quiser usar um modelo específico (ex.: "gpt-4o-mini").
  */
 export async function createThread(userId, content) {
   const thread = await openai.beta.threads.create({
@@ -119,8 +117,8 @@ export async function summarizeContext(threadId) {
 
 /**
  * Aguarda a conclusão de um run no OpenAI, re-tentando até maxRetries.
- * Se o modelo chamar a função "get_products_info", chamamos a função real
- * e retornamos o JSON ao modelo, para que ele possa responder ao usuário.
+ * Se o modelo chamar a função "get_products_info" ou "get_orders_info",
+ * chamamos a função real e retornamos o JSON ao modelo.
  */
 export async function waitForRunCompletion(threadId, runId, maxRetries = 30, delay = 8000) {
   let retries = 0;
@@ -135,7 +133,8 @@ export async function waitForRunCompletion(threadId, runId, maxRetries = 30, del
         return run;
       } else if (run.status === "requires_action") {
         const toolCall = run.required_action.submit_tool_outputs.tool_calls[0];
-        if (toolCall && toolCall.function.name === "get_products_info") {
+        if (toolCall) {
+          const functionName = toolCall.function.name;
           let args = {};
           try {
             args = JSON.parse(toolCall.function.arguments);
@@ -143,21 +142,78 @@ export async function waitForRunCompletion(threadId, runId, maxRetries = 30, del
             console.error("Erro ao parsear arguments:", parseError.message);
           }
 
-          const endpoint = args.endpoint || "";
-          console.log("Chamando get_products_info com endpoint:", endpoint);
+          if (functionName === "get_products_info") {
+            const endpoint = args.endpoint || "";
+            console.log("Chamando get_products_info com endpoint:", endpoint);
 
-          // Chama a função real que obtém produtos da sua loja
-          const productInfo = await get_products_info(endpoint);
+            // Chama a função real que obtém produtos da sua loja
+            const productInfo = await get_products_info(endpoint);
+            const productOutput = JSON.stringify(productInfo);
 
-          // Submete o resultado ao run
-          await openai.beta.threads.runs.submitToolOutputs(threadId, runId, {
-            tool_outputs: [
-              {
-                tool_call_id: toolCall.id,
-                output: JSON.stringify(productInfo)
+            await openai.beta.threads.runs.submitToolOutputs(threadId, runId, {
+              tool_outputs: [
+                {
+                  tool_call_id: toolCall.id,
+                  output: productOutput
+                }
+              ]
+            });
+          } else if (functionName === "get_orders_info") {
+            const endpoint = args.endpoint || "";
+            console.log("Chamando get_orders_info com endpoint:", endpoint);
+
+            // Chama a função real que obtém pedidos (orders) da sua loja
+            const ordersData = await getOrdersInfo(endpoint);
+
+            // Se o argumento order_number for fornecido, filtra os pedidos
+            if (args.order_number) {
+              const orderNumber = args.order_number.toString().replace("#", "").trim();
+              console.log(`Filtrando os pedidos pelo número: ${orderNumber}`);
+              if (ordersData.orders && Array.isArray(ordersData.orders)) {
+                const filteredOrders = ordersData.orders.filter(order => {
+                  if (order.order_number && order.order_number.toString() === orderNumber) {
+                    return true;
+                  }
+                  if (order.name) {
+                    const nameNumber = order.name.replace("#", "").trim();
+                    return nameNumber === orderNumber;
+                  }
+                  return false;
+                });
+                if (filteredOrders.length > 0) {
+                  ordersData.orders = filteredOrders;
+                } else {
+                  ordersData.note = `Nenhum pedido com o número ${orderNumber} foi encontrado.`;
+                }
               }
-            ]
-          });
+            }
+
+            let ordersOutput = JSON.stringify(ordersData);
+            const MAX_OUTPUT_LENGTH = 512 * 1024; // 512KB
+
+            // Se NÃO estivermos filtrando (ou seja, se nenhum order_number foi fornecido)
+            // e o output for muito grande, trunca para os 50 pedidos mais recentes.
+            if (!args.order_number && ordersOutput.length > MAX_OUTPUT_LENGTH) {
+              console.warn(`Output length ${ordersOutput.length} excede o máximo permitido. Truncando o output.`);
+              if (ordersData.orders && Array.isArray(ordersData.orders)) {
+                ordersData.note = "Exibindo apenas os primeiros 50 pedidos, pois o resultado completo excede o tamanho máximo permitido.";
+                ordersData.orders = ordersData.orders.slice(0, 50);
+              }
+              ordersOutput = JSON.stringify(ordersData);
+              if (ordersOutput.length > MAX_OUTPUT_LENGTH) {
+                ordersOutput = ordersOutput.substring(0, MAX_OUTPUT_LENGTH);
+              }
+            }
+            // Se estivermos filtrando, esperamos que o resultado seja pequeno e não aplicamos truncamento.
+            await openai.beta.threads.runs.submitToolOutputs(threadId, runId, {
+              tool_outputs: [
+                {
+                  tool_call_id: toolCall.id,
+                  output: ordersOutput
+                }
+              ]
+            });
+          }
         }
       }
     } catch (error) {
@@ -167,7 +223,6 @@ export async function waitForRunCompletion(threadId, runId, maxRetries = 30, del
 
     console.log(`Tentativa ${retries} para o run ${runId}: status = ${run?.status}`);
     retries++;
-    // Aguarda cada vez mais tempo (ex.: linear ou exponencial)
     await new Promise(resolve => setTimeout(resolve, delay * retries));
   }
 
