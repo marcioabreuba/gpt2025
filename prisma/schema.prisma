@@ -1,0 +1,35 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+
+model Orders {
+  id                Int      @id @default(autoincrement())
+  orderId           String   @unique
+  status            String
+  statusDescription String?
+  origin            String
+  externalId        String?
+  value             String
+  discount          String?
+  currency          String?
+  linkStatus        String?
+  formPayment       String?
+  formSend          String?
+  datePurchase      String?
+  forecast          Int?     @default(0)
+  coupon            Json?
+  Address           Json?
+  items             Json
+  recovery          Json?
+  tracking          Json?
+  shopifyId         Json?
+  yampiId           Json?    @default("{}")
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @default(now()) @updatedAt
+}

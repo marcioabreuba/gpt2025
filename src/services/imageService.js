@@ -1,4 +1,4 @@
-// Serviço para download e processamento de imagens, incluindo a geração de uma descrição usando OpenAI
+// Serviço otimizado para download e processamento de imagens, incluindo a geração de uma descrição usando OpenAI
 
 import axios from 'axios';
 import fs from 'fs';
@@ -10,74 +10,67 @@ import OpenAI from "openai";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const openai = new OpenAI({
-  apiKey: config.openai.apiKey
-});
+const openai = new OpenAI({ apiKey: config.openai.apiKey });
 
 /**
  * Faz o download da imagem a partir de uma URL e salva localmente.
  * @param {string} url - URL da imagem.
- * @returns {string} - Caminho para o arquivo da imagem baixada.
+ * @returns {Promise<string>} - Caminho para o arquivo da imagem baixada.
  */
 export async function downloadImage(url) {
-  const imagePath = path.join(__dirname, 'temp_image.jpg');
-  const writer = fs.createWriteStream(imagePath);
+  try {
+    const imagePath = path.join(__dirname, `temp_${Date.now()}.jpg`);
+    const writer = fs.createWriteStream(imagePath);
 
-  const response = await axios({
-    url,
-    method: 'GET',
-    responseType: 'stream',
-    headers: {
-      Authorization: `Bearer ${config.graphApiToken}`
-    }
-  });
+    const response = await axios({
+      url,
+      method: 'GET',
+      responseType: 'stream',
+      headers: { Authorization: `Bearer ${config.graphApiToken}` }
+    });
 
-  response.data.pipe(writer);
+    response.data.pipe(writer);
 
-  return new Promise((resolve, reject) => {
-    writer.on('finish', () => resolve(imagePath));
-    writer.on('error', reject);
-  });
+    return new Promise((resolve, reject) => {
+      writer.on('finish', () => resolve(imagePath));
+      writer.on('error', reject);
+    });
+  } catch (error) {
+    console.error('Erro ao baixar imagem:', error);
+    throw new Error('Falha no download da imagem');
+  }
 }
 
 /**
- * Envia a imagem para a API do OpenAI e obtém uma descrição da imagem.
+ * Envia a imagem para a API do OpenAI e obtém uma descrição.
  * @param {string} imagePath - Caminho local da imagem.
  * @param {string} caption - Legenda adicional (opcional).
- * @returns {string} - Descrição retornada pela API.
+ * @returns {Promise<string>} - Descrição retornada pela API.
  */
-export async function describeImage(imagePath, caption) {
-  const imageBuffer = fs.readFileSync(imagePath);
-  const base64Image = imageBuffer.toString('base64');
-  const messages = [
-    {
-      role: "user",
-      content: [
-        {
-          type: "text",
-          text: `Eu sou uma IA intermediária que faz descrição de imagens. Aqui está a descrição da imagem enviada pelo usuário. ${caption}`
-        },
-        {
-          type: "image_url",
-          image_url: {
-            url: `data:image/jpeg;base64,${base64Image}`
-          }
-        }
-      ]
-    }
-  ];
-
+export async function describeImage(imagePath, caption = '') {
   try {
+    const imageBuffer = fs.readFileSync(imagePath);
+    const base64Image = imageBuffer.toString('base64');
+    const messages = [
+      {
+        role: "user",
+        content: [
+          { type: "text", text: `Descreva a imagem enviada pelo usuário. ${caption}` },
+          { type: "image_url", image_url: { url: `data:image/jpeg;base64,${base64Image}` } }
+        ]
+      }
+    ];
+
     const response = await openai.chat.completions.create({
       model: config.openai.model,
       messages,
-      max_tokens: 2000
+      max_tokens: 1000
     });
-    console.log("Descrição da imagem:", response.choices[0].message.content);
-    return response.choices[0].message.content;
+
+    return response.choices[0]?.message?.content || 'Descrição não disponível';
   } catch (error) {
-    console.error("Erro ao descrever imagem:", error);
-    throw error;
+    console.error('Erro ao descrever imagem:', error);
+    throw new Error('Falha ao processar a descrição da imagem');
   }
 }
 
@@ -85,16 +78,19 @@ export async function describeImage(imagePath, caption) {
  * Processa a imagem: faz o download, obtém a descrição e remove o arquivo temporário.
  * @param {string} imageUrl - URL da imagem.
  * @param {string} caption - Legenda adicional (opcional).
- * @returns {string} - Descrição da imagem.
+ * @returns {Promise<string>} - Descrição da imagem.
  */
-export async function processImage(imageUrl, caption) {
+export async function processImage(imageUrl, caption = '') {
+  let imagePath;
   try {
-    const imagePath = await downloadImage(imageUrl);
-    const description = await describeImage(imagePath, caption);
-    fs.unlinkSync(imagePath); // Remove o arquivo temporário após o processamento
-    return description;
+    imagePath = await downloadImage(imageUrl);
+    return await describeImage(imagePath, caption);
   } catch (error) {
-    console.error("Erro ao processar imagem:", error);
-    throw error;
+    console.error('Erro ao processar imagem:', error);
+    throw new Error('Erro no processamento da imagem');
+  } finally {
+    if (imagePath && fs.existsSync(imagePath)) {
+      fs.unlinkSync(imagePath);
+    }
   }
 }
