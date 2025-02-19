@@ -255,7 +255,7 @@ export async function getOrdersInfo(endpoint) {
   const ordersWithTracking = processOrdersWithTracking(allOrders);
   await setOrdersCache(ordersWithTracking);
   return { orders: ordersWithTracking };
-};
+}
 
 /**
  * Retorna um subconjunto dos dados do pedido.

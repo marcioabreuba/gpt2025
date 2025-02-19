@@ -7,7 +7,12 @@ const router = express.Router();
 
 /**
  * Endpoint para buscar informações de pedidos (orders).
- * Ex.: POST /get_orders_info
+ * Exemplo de uso:
+ *   POST /get_orders_info
+ *   Body:
+ *     {
+ *       "endpoint": "https://sualoja.myshopify.com/admin/api/2024-10/orders.json"
+ *     }
  */
 router.post('/get_orders_info', async (req, res) => {
   try {
@@ -16,12 +21,13 @@ router.post('/get_orders_info', async (req, res) => {
       return res.status(400).json({ error: "Falta endpoint" });
     }
 
+    // Busca os pedidos utilizando a função do serviço do Shopify
     const ordersData = await getOrdersInfo(endpoint);
-    res.json(ordersData);
+    return res.json(ordersData);
 
   } catch (error) {
     console.error("Erro ao obter pedidos:", error);
-    res.status(500).json({ error: error.message });
+    return res.status(500).json({ error: error.message });
   }
 });
 
