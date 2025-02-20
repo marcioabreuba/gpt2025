@@ -1,4 +1,5 @@
 // src/index.js
+import 'dotenv/config';
 import express from 'express';
 import bodyParser from 'body-parser';
 import cors from 'cors';
@@ -12,6 +13,7 @@ import webhookRoutes from './routes/webhook.js';
 
 // Importa a nova rota de pedidos
 import ordersRoutes from './routes/orders.js';
+import pedidosRoutes from './routes/api/pedidos.js';
 
 const app = express();
 
@@ -26,8 +28,9 @@ app.use(statusRoutes);
 app.use(productsRoutes);
 app.use(webhookRoutes);
 
-// Aqui registra a rota de pedidos
-app.use(ordersRoutes);
+// ✅ Agora as rotas de pedidos estarão acessíveis em "/api/get_orders_info"
+app.use('/api', ordersRoutes);
+app.use('/api', pedidosRoutes);
 
 // Middleware centralizado para tratamento de erros
 app.use(errorHandler);
