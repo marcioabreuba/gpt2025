@@ -18,7 +18,7 @@ router.post("/webhook", async (req, res, next) => {
     if (type === "ReceivedCallback" && fromMe === false && phone) {
       const message = text?.message || "";
       // Loga a mensagem recebida do usuário
-      logger.info("Mensagem recebida do usuário", { chatLid, phone, message });
+      logger.info(`Usuário ${phone} → Sofia: "${message}"`);
       await getChat(chatLid, phone, message);
     }
     res.sendStatus(200);

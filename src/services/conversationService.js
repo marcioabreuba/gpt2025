@@ -146,6 +146,9 @@ export async function getChat(userId, phone, message, imageUrl, caption = '') {
           timestamp: Date.now()
         });
 
+        // Registrar a resposta que será enviada
+        console.log(`Sofia responde para ${phone}: "${response}"`);
+
         // Envia resposta via WhatsApp
         await sendReplyZAPI(phone, response);
 
