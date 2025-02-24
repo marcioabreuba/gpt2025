@@ -5,17 +5,15 @@ const prisma = new PrismaClient();
 
 const cleanNumber = (value) => value ? value.replace(/\D/g, '') : '';
 
-export async function findOrderByUser(phone, externalId, cpf) {
+export async function findOrderByUser(phone, externalId) {
   try {
     const cleanPhone = cleanNumber(phone);
-    const cleanCpf = cleanNumber(cpf);
     const cleanExternalId = externalId ? externalId.toString().replace(/\D/g, '') : '';
 
     const whereClause = {
       OR: [
         ...(cleanPhone ? [{ phone: { contains: cleanPhone } }] : []),
         ...(cleanExternalId ? [{ externalId: cleanExternalId }] : []),
-        ...(cleanCpf ? [{ cpf: cleanCpf }] : [])
       ]
     };
 
