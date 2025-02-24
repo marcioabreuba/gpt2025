@@ -177,11 +177,7 @@ export async function getOrderByNumber(endpoint, orderQuery, userPhone) {
       };
     }
 
-    // 2. Busca detalhes na Shopify
-    const url = new URL(endpoint);
-    url.pathname = `/admin/api/2024-10/orders/${prismaOrder.orderId}.json`;
-    
-    const response = await axios.get(url.toString(), {
+    const response = await axios.get(`https://6281d6-2.myshopify.com/admin/api/2024-10/orders/${prismaOrder.orderId}.json`, {
       headers: {
         'X-Shopify-Access-Token': config.shopify.accessToken,
         'Accept-Encoding': 'gzip,deflate,compress'
