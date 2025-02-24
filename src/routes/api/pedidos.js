@@ -1,89 +1,164 @@
 import express from 'express';
 import { PrismaClient } from '@prisma/client';
 import axios from 'axios';
-import 'dotenv/config'; // Carrega as variáveis de ambiente
+import 'dotenv/config';
 
 const router = express.Router();
 const prisma = new PrismaClient();
 
-// Configuração do Shopify
-const SHOPIFY_SHOP_DOMAIN = process.env.SHOPIFY_SHOP_DOMAIN; // Ex: 6281d6-2.myshopify.com
-const SHOPIFY_ACCESS_TOKEN = process.env.SHOPIFY_ACCESS_TOKEN; // Seu Access Token
+// Configurações do Shopify
+const SHOPIFY_SHOP_DOMAIN = process.env.SHOPIFY_SHOP_DOMAIN;
+const SHOPIFY_ACCESS_TOKEN = process.env.SHOPIFY_ACCESS_TOKEN;
 
-router.post('/pedidos', async (req, res) => {
-  try {
-    let allOrders = []; // Armazena todos os pedidos
-    let nextPageUrl = `https://${SHOPIFY_SHOP_DOMAIN}/admin/api/2023-10/orders.json?limit=250`; // URL inicial
+// Função para buscar todos os pedidos com paginação
+async function fetchAllShopifyOrders() {
+  let allOrders = [];
+  let nextPageUrl = `https://${SHOPIFY_SHOP_DOMAIN}/admin/api/2024-10/orders.json?status=any&limit=250`;
+  let attempt = 0;
+  const maxAttempts = 3;
 
-    // Loop para buscar todas as páginas de pedidos
-    while (nextPageUrl) {
+  while (nextPageUrl && attempt < maxAttempts) {
+    try {
       const response = await axios.get(nextPageUrl, {
         headers: {
           'X-Shopify-Access-Token': SHOPIFY_ACCESS_TOKEN,
+          'Accept-Encoding': 'gzip,deflate,compress',
         },
+        timeout: 30000,
       });
 
-      const orders = response.data.orders;
-      allOrders = allOrders.concat(orders); // Adiciona os pedidos da página atual
+      allOrders = [...allOrders, ...response.data.orders];
 
-      // Verifica se há mais páginas
       const linkHeader = response.headers.link;
       nextPageUrl = null;
 
       if (linkHeader) {
         const links = linkHeader.split(',');
-        const nextLink = links.find((link) => link.includes('rel="next"'));
-
+        const nextLink = links.find(link => link.includes('rel="next"'));
         if (nextLink) {
-          nextPageUrl = nextLink.split(';')[0].trim().slice(1, -1); // Extrai a URL da próxima página
+          nextPageUrl = nextLink.split(';')[0].trim().slice(1, -1);
+        }
+      }
+      attempt = 0;
+    } catch (error) {
+      console.error(`Erro na paginação (tentativa ${attempt + 1}/${maxAttempts}):`, error.message);
+      attempt++;
+      if (attempt >= maxAttempts) {
+        throw new Error('Falha na paginação após 3 tentativas');
+      }
+      await new Promise(resolve => setTimeout(resolve, 2000 * attempt));
+    }
+  }
+
+  return allOrders;
+}
+
+// Função para mapear dados do pedido
+function mapOrderData(order) {
+  const latestFulfillment = order.fulfillments?.length > 0 ? order.fulfillments[order.fulfillments.length - 1] : null;
+
+  return {
+    orderId: order.id.toString(),
+    status: order.financial_status || 'unknown',
+    statusDescription: order.note || order.customer?.note || null,
+    origin: 'shopify',
+    externalId: order.order_number?.toString() || null,
+    value: order.total_price,
+    discount: order.total_discounts,
+    currency: order.currency,
+    linkStatus: null,
+    formPayment: order.payment_gateway_names?.[0] || order.gateway || null,
+    formSend: order.shipping_lines?.[0]?.title || order.shipping_lines?.[0]?.code || null,
+    datePurchase: order.created_at ? new Date(order.created_at).toISOString() : null,
+    checkoutDate: order.processed_at ? new Date(order.processed_at).toISOString() : null,
+    forecast: 0,
+    coupon: order.discount_codes || [],
+    Address: order.shipping_address || {},
+    billingAddress: order.billing_address || {},
+    items: order.line_items || [],
+    recovery: { attempts: 0 },
+    tracking: order.fulfillments || [],
+    shopifyId: { id: order.id, name: order.name },
+    yampiId: {},
+    customerName: order.customer ? `${order.customer.first_name || ''} ${order.customer.last_name || ''}`.trim() || null : null,
+    customerEmail: order.customer?.email || null,
+    customerPhone: order.customer?.phone || order.shipping_address?.phone || null,
+    customerId: order.customer?.id?.toString() || null,
+    trackingCode: latestFulfillment?.tracking_number || null,
+    trackingStatus: latestFulfillment?.status || null,
+    trackingUpdatedAt: latestFulfillment?.updated_at ? new Date(latestFulfillment.updated_at).toISOString() : null,
+    fulfillmentService: latestFulfillment?.service || null,
+    fulfillmentStatus: order.fulfillment_status || null,
+    fulfillmentDate: latestFulfillment?.created_at ? new Date(latestFulfillment.created_at).toISOString() : null,
+    processedAt: order.processed_at ? new Date(order.processed_at).toISOString() : null,
+    closedAt: order.closed_at ? new Date(order.closed_at).toISOString() : null,
+    cancelledAt: order.cancelled_at ? new Date(order.cancelled_at).toISOString() : null,
+    confirmationEmailSentAt: order.email ? new Date(order.updated_at).toISOString() : null,
+  };
+}
+
+// Rota principal
+router.post('/pedidos', async (req, res) => {
+  try {
+    const orders = await fetchAllShopifyOrders();
+    console.log(`🔄 Total de pedidos encontrados: ${orders.length}`);
+
+    const results = {
+      success: 0,
+      skipped: 0,
+      errors: 0,
+      lastOrderId: null,
+    };
+
+    for (const order of orders) {
+      try {
+        const orderData = mapOrderData(order);
+
+        if (!orderData.orderId || !orderData.status) {
+          console.warn(`⚠️ Pedido ${order.id} inválido, pulando...`);
+          results.skipped++;
+          continue;
+        }
+
+        await prisma.$transaction(async (tx) => {
+          await tx.orders.upsert({
+            where: { orderId: orderData.orderId },
+            update: orderData,
+            create: orderData,
+          });
+        });
+
+        results.success++;
+        results.lastOrderId = order.id;
+        console.log(`✅ Pedido ${order.id} sincronizado`);
+
+      } catch (error) {
+        results.errors++;
+        console.error(`❌ Erro no pedido ${order.id}:`, error.message);
+        if (process.env.NODE_ENV === 'development') {
+          console.error('Detalhes do erro:', error);
         }
       }
     }
 
-    console.log(`Total de pedidos encontrados: ${allOrders.length}`);
-
-    // Inserir cada pedido no banco de dados usando Prisma
-    for (const order of allOrders) {
-      try {
-        await prisma.orders.create({
-          data: {
-            orderId: order.id.toString(), // orderId (String)
-            status: order.financial_status || 'unknown', // status (String)
-            statusDescription: order.customer?.note || null, // statusDescription (String?)
-            origin: 'shopify', // origin (String)
-            externalId: order.order_number?.toString() || null, // externalId (String?)
-            value: order.total_price, // value (String)
-            discount: order.total_discounts, // discount (String?)
-            currency: order.currency, // currency (String?)
-            linkStatus: null, // linkStatus (String?)
-            formPayment: order.gateway, // formPayment (String?)
-            formSend: null, // formSend (String?)
-            datePurchase: order.created_at, // datePurchase (String?)
-            forecast: 0, // forecast (Int?)
-            coupon: order.discount_codes || [], // coupon (Json?)
-            Address: order.shipping_address || {}, // Address (Json?)
-            items: order.line_items || [], // items (Json)
-            recovery: { attempts: 0 }, // recovery (Json?)
-            tracking: order.fulfillments || [], // tracking (Json?)
-            shopifyId: { id: order.id, name: order.name }, // shopifyId (Json?)
-            yampiId: {}, // yampiId (Json?)
-          },
-        });
-        console.log(`Pedido ${order.id} inserido com sucesso!`);
-      } catch (error) {
-        console.error(`Erro ao inserir pedido ${order.id}:`, error);
-      }
-    }
-
-    // Responder com sucesso
-    res.send({
+    res.status(200).json({
       success: true,
-      message: 'Todos os pedidos foram processados!',
-      totalPedidos: allOrders.length,
+      message: 'Sincronização concluída',
+      stats: {
+        total: orders.length,
+        ...results,
+      },
     });
+
   } catch (error) {
-    console.error('Erro ao obter pedidos:', error);
-    return res.status(500).json({ error: error.message });
+    console.error('🚨 Erro geral na sincronização:', error.message);
+    res.status(500).json({
+      success: false,
+      error: 'Erro na sincronização',
+      details: process.env.NODE_ENV === 'development' ? error.message : null,
+    });
+  } finally {
+    await prisma.$disconnect();
   }
 });
 
