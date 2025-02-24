@@ -132,7 +132,10 @@ async function handleOrdersInfo(threadId, toolCall) {
   console.log("threadId:", threadId);
   const { endpoint, order_number, cpf } = JSON.parse(toolCall.function.arguments);
   const phone = await extractPhoneFromContext(threadId);
-  return getOrderByNumber(endpoint, order_number || cpf, phone);
+  
+  // Passa todos os parâmetros possíveis para getOrderByNumber
+  // Respeitando a prioridade: telefone -> número do pedido -> CPF
+  return getOrderByNumber(endpoint, order_number, phone, cpf);
 }
 
 async function extractPhoneFromContext(threadId) {

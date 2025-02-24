@@ -164,11 +164,12 @@ export async function getOrdersInfo(endpoint) {
   return { orders: processedOrders };
 }
 
-export async function getOrderByNumber(endpoint, orderQuery, userPhone) {
+export async function getOrderByNumber(endpoint, orderQuery, userPhone, userCpf = null) {
   try {
-    // 1. Busca no Prisma
-    const prismaOrder = await findOrderByUser(userPhone, orderQuery);
+    // 1. Busca no Prisma seguindo a ordem de prioridade
+    const prismaOrder = await findOrderByUser(userPhone, orderQuery, userCpf);
     console.log('Prisma Order:', prismaOrder);
+    
     if (!prismaOrder) {
       return {
         status: 'not_found',
