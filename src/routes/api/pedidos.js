@@ -59,41 +59,9 @@ function mapOrderData(order) {
 
   return {
     orderId: order.id.toString(),
-    status: order.financial_status || 'unknown',
-    statusDescription: order.note || order.customer?.note || null,
-    origin: 'shopify',
     externalId: order.order_number?.toString() || null,
-    value: order.total_price,
-    discount: order.total_discounts,
-    currency: order.currency,
-    linkStatus: null,
-    formPayment: order.payment_gateway_names?.[0] || order.gateway || null,
-    formSend: order.shipping_lines?.[0]?.title || order.shipping_lines?.[0]?.code || null,
-    datePurchase: order.created_at ? new Date(order.created_at).toISOString() : null,
-    checkoutDate: order.processed_at ? new Date(order.processed_at).toISOString() : null,
-    forecast: 0,
-    coupon: order.discount_codes || [],
-    Address: order.shipping_address || {},
-    billingAddress: order.billing_address || {},
-    items: order.line_items || [],
-    recovery: { attempts: 0 },
-    tracking: order.fulfillments || [],
-    shopifyId: { id: order.id, name: order.name },
-    yampiId: {},
-    customerName: order.customer ? `${order.customer.first_name || ''} ${order.customer.last_name || ''}`.trim() || null : null,
-    customerEmail: order.customer?.email || null,
-    customerPhone: order.customer?.phone || order.shipping_address?.phone || null,
-    customerId: order.customer?.id?.toString() || null,
-    trackingCode: latestFulfillment?.tracking_number || null,
-    trackingStatus: latestFulfillment?.status || null,
-    trackingUpdatedAt: latestFulfillment?.updated_at ? new Date(latestFulfillment.updated_at).toISOString() : null,
-    fulfillmentService: latestFulfillment?.service || null,
-    fulfillmentStatus: order.fulfillment_status || null,
-    fulfillmentDate: latestFulfillment?.created_at ? new Date(latestFulfillment.created_at).toISOString() : null,
-    processedAt: order.processed_at ? new Date(order.processed_at).toISOString() : null,
-    closedAt: order.closed_at ? new Date(order.closed_at).toISOString() : null,
-    cancelledAt: order.cancelled_at ? new Date(order.cancelled_at).toISOString() : null,
-    confirmationEmailSentAt: order.email ? new Date(order.updated_at).toISOString() : null,
+    cpf: order.shipping_address?.company || null,
+    phone: order.customer?.phone || order.shipping_address?.phone.toString() || null,
   };
 }
 
@@ -114,7 +82,7 @@ router.post('/pedidos', async (req, res) => {
       try {
         const orderData = mapOrderData(order);
 
-        if (!orderData.orderId || !orderData.status) {
+        if (!orderData.orderId) {
           console.warn(`⚠️ Pedido ${order.id} inválido, pulando...`);
           results.skipped++;
           continue;

@@ -1,135 +1,18 @@
-import sqlite3
-import json
+generator client {
+  provider = "prisma-client-js"
+}
 
-# Conecta ao banco de dados SQLite
-conn = sqlite3.connect("shopify_orders_single_table.db")
-cursor = conn.cursor()
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
 
-# Cria a tabela atualizada
-cursor.execute("""
-CREATE TABLE IF NOT EXISTS orders (
-    order_id BIGINT PRIMARY KEY,
-    external_id VARCHAR(50),
-    status VARCHAR(50),
-    fulfillment_status VARCHAR(50),
-    total_value DECIMAL(10, 2),
-    currency VARCHAR(3) DEFAULT 'BRL',
-    payment_method VARCHAR(50),
-    shipping_method VARCHAR(255),
-    customer_id BIGINT,
-    customer_name VARCHAR(255),
-    customer_email VARCHAR(255),
-    customer_phone VARCHAR(20),
-    cpf VARCHAR(11),
-    items TEXT,
-    shipping_address TEXT,
-    billing_address TEXT,
-    tracking_info TEXT,
-    created_at TIMESTAMP,
-    processed_at TIMESTAMP,
-    cancelled_at TIMESTAMP,
-    confirmation_email_sent_at TIMESTAMP,
-    fulfillment_date TIMESTAMP,
-    tracking_code VARCHAR(50),
-    tracking_status VARCHAR(50),
-    tracking_updated_at TIMESTAMP,
-    admin_graphql_api_id VARCHAR(50),
-    cart_token VARCHAR(50),
-    checkout_token VARCHAR(50),
-    confirmed BOOLEAN,
-    current_subtotal_price DECIMAL(10, 2),
-    current_total_discounts DECIMAL(10, 2),
-    current_total_tax DECIMAL(10, 2),
-    financial_status VARCHAR(50),
-    presentment_currency VARCHAR(3),
-    total_weight INTEGER,
-    tax_exempt BOOLEAN,
-    tags TEXT,
-    note_attributes TEXT,
-    discount_applications TEXT,
-    order_status_url VARCHAR(255)
-);
-""")
-
-# Carrega os dados do JSON
-with open("your_orders.json", "r", encoding="utf-8") as f:
-    orders_data = json.load(f)
-
-# Função para inserir os dados na tabela
-def insert_data(orders):
-    for order in orders:
-        # Extrai os dados existentes
-        items_json = json.dumps(order.get("line_items", []), ensure_ascii=False)
-        shipping_address_json = json.dumps(order.get("shipping_address", {}), ensure_ascii=False)
-        billing_address_json = json.dumps(order.get("billing_address", {}), ensure_ascii=False)
-        tracking_info_json = json.dumps(order.get("fulfillments", []), ensure_ascii=False)
-        note_attributes_json = json.dumps(order.get("note_attributes", []), ensure_ascii=False)
-        discount_applications_json = json.dumps(order.get("discount_applications", []), ensure_ascii=False)
-
-        # Extrai CPF de 'company' (se disponível)
-        cpf = order.get("shipping_address", {}).get("company") if order.get("shipping_address", {}).get("company", "").isdigit() and len(order.get("shipping_address", {}).get("company", "")) == 11 else None
-
-        # Insere o registro com os novos campos, incluindo order_status_url
-        cursor.execute("""
-            INSERT OR REPLACE INTO orders (
-                order_id, external_id, status, fulfillment_status, total_value, currency, payment_method,
-                shipping_method, customer_id, customer_name, customer_email, customer_phone, cpf,
-                items, shipping_address, billing_address, tracking_info, created_at, processed_at,
-                cancelled_at, confirmation_email_sent_at, fulfillment_date, tracking_code,
-                tracking_status, tracking_updated_at, admin_graphql_api_id, cart_token, checkout_token,
-                confirmed, current_subtotal_price, current_total_discounts, current_total_tax,
-                financial_status, presentment_currency, total_weight, tax_exempt, tags,
-                note_attributes, discount_applications, order_status_url
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 
-                      ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            order.get("id"),
-            order.get("admin_graphql_api_id"),
-            order.get("financial_status"),
-            order.get("fulfillment_status", "pending"),
-            float(order.get("total_price", 0)),
-            order.get("currency"),
-            order.get("payment_method"),
-            order.get("shipping_lines", [{}])[0].get("title"),
-            order.get("customer_id"),
-            f"{order.get('customer', {}).get('first_name', '')} {order.get('customer', {}).get('last_name', '')}".strip(),
-            order.get("email"),
-            order.get("phone"),
-            cpf,
-            items_json,
-            shipping_address_json,
-            billing_address_json,
-            tracking_info_json,
-            order.get("created_at"),
-            order.get("processed_at"),
-            order.get("cancelled_at"),
-            order.get("confirmation_email_sent_at"),
-            order.get("fulfillment_date"),
-            order.get("tracking_number"),
-            order.get("tracking_status"),
-            order.get("tracking_updated_at"),
-            order.get("admin_graphql_api_id"),
-            order.get("cart_token"),
-            order.get("checkout_token"),
-            order.get("confirmed"),
-            float(order.get("current_subtotal_price", 0)),
-            float(order.get("current_total_discounts", 0)),
-            float(order.get("current_total_tax", 0)),
-            order.get("financial_status"),
-            order.get("presentment_currency"),
-            order.get("total_weight"),
-            order.get("tax_exempt"),
-            order.get("tags"),
-            note_attributes_json,
-            discount_applications_json,
-            order.get("order_status_url")  # Novo campo adicionado
-        ))
-
-    conn.commit()
-
-# Executa a inserção
-insert_data(orders_data)
-print(f"{len(orders_data)} pedidos inseridos na tabela 'orders'.")
-
-# Fecha a conexão
-conn.close()
+model Orders {
+  id         Int      @id @default(autoincrement())
+  orderId    String   @unique
+  phone      String
+  cpf        String
+  externalId String   @unique
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @default(now()) @updatedAt
+}

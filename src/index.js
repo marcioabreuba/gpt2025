@@ -7,7 +7,7 @@ import config from './config.js';
 import limiter from './middlewares/rateLimiter.js';
 import { checkMessageSize } from './middlewares/messageSize.js';
 import { errorHandler } from './middlewares/errorHandler.js';
-import { checkAndCreateTables } from './utils/dbCheck.js'; // Nova importação
+import { PrismaClient } from '@prisma/client'
 
 // Rotas
 import statusRoutes from './routes/status.js';
@@ -19,16 +19,17 @@ import pedidosRoutes from './routes/api/pedidos.js';
 const app = express();
 
 // Configuração inicial do banco de dados
-async function initializeDatabase() {
+const prisma = new PrismaClient();
+
+
+const startDb = async () => {
   try {
-    console.log('🔄 Verificando banco de dados...');
-    await checkAndCreateTables();
-    console.log('✅ Banco de dados verificado!');
+    await prisma.$connect();
   } catch (error) {
-    console.error('❌ Falha na inicialização do banco:', error);
-    process.exit(1); // Encerra o processo em caso de erro crítico
+    process.exit(1);
   }
-}
+};
+
 
 // Middlewares
 app.use(bodyParser.json({ limit: '50mb' }));
@@ -40,7 +41,7 @@ app.use(checkMessageSize);
 // Inicialização segura
 async function startServer() {
   // 1. Primeiro verifica/cria as tabelas
-  await initializeDatabase();
+  await startDb();
 
   // 2. Depois registra as rotas
   app.use(statusRoutes);

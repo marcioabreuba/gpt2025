@@ -8,7 +8,7 @@
     "start": "node src/index.js"
   },
   "dependencies": {
-    "@prisma/client": "^6.4.0",
+    "@prisma/client": "^6.4.1",
     "@shopify/shopify-api": "^11.9.0",
     "axios": "^1.7.9",
     "body-parser": "^1.20.2",

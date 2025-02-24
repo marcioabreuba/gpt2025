@@ -27,20 +27,24 @@ export async function getChat(userId, phone, message, imageUrl, caption = '') {
       throw new Error('userId e message ou imageUrl são obrigatórios');
     }
 
-    // Inicializa buffer de mensagens do usuário, se não existir
+    // Inicializa buffer de mensagens do usuário
     if (!messageBuffers.has(userId)) {
       messageBuffers.set(userId, []);
     }
 
-    // Armazena mensagens no buffer
-    messageBuffers.get(userId).push(imageUrl ? { type: 'image', imageUrl, caption } : { type: 'text', message });
+    // Armazena mensagens no buffer com phone
+    messageBuffers.get(userId).push({
+      type: imageUrl ? 'image' : 'text',
+      content: imageUrl || message,
+      meta: { phone, caption }
+    });
 
-    // Reseta o timeout caso já exista um
+    // Reseta o timeout existente
     if (bufferTimeouts.has(userId)) {
       clearTimeout(bufferTimeouts.get(userId));
     }
 
-    // Configura um novo timeout para processar mensagens acumuladas
+    // Novo timeout para processamento
     bufferTimeouts.set(userId, setTimeout(async () => {
       try {
         const bufferedMessages = messageBuffers.get(userId);
@@ -50,70 +54,114 @@ export async function getChat(userId, phone, message, imageUrl, caption = '') {
         const currentDate = moment().tz(config.timezone).format('DD/MM/YYYY');
         let threadId = await redisClient.get(`threadId:${userId}`);
 
-        // Se não existir uma thread, cria uma nova
+        // Cria novo thread se necessário
         if (!threadId) {
           const greeting = getTimeBasedGreeting();
-          const initialMessage = `${greeting} [Data: ${currentDate}]`;
+          const initialMessage = `${greeting} [Data: ${currentDate}] [Phone: ${phone}]`;
           const thread = await createThread(userId, initialMessage);
           threadId = thread.id;
           await redisClient.set(`threadId:${userId}`, threadId);
-          await storeMessageInConversation(userId, threadId, { role: 'user', content: initialMessage, timestamp: Date.now() });
+          await storeMessageInConversation(userId, threadId, { 
+            role: 'user', 
+            content: initialMessage, 
+            timestamp: Date.now() 
+          });
         } else {
-          // Verifica o uso de tokens para evitar estouro do limite
+          // Verificação de limite de tokens
           const totalTokens = await getTokenUsage(threadId);
           if (totalTokens > TOKEN_LIMIT) {
             const summarizedContext = await summarizeContext(threadId);
-            const newThread = await createThread(userId, 'Continuação da conversa anterior. Contexto resumido:');
+            const newThread = await createThread(userId, 
+              `[Continuação] [Phone: ${phone}] Contexto: ${summarizedContext}`
+            );
             threadId = newThread.id;
             await redisClient.set(`threadId:${userId}`, threadId);
             await addMessageWithRetry(threadId, summarizedContext);
           }
         }
 
-        // Processa mensagens armazenadas
+        // Processa mensagens bufferizadas
         for (const item of bufferedMessages) {
           if (item.type === 'text') {
-            const formattedMessage = `${item.message} [Data: ${currentDate}]`;
+            const formattedMessage = `${item.content} [Data: ${currentDate}] [Phone: ${phone}]`;
+            
             if (formattedMessage.toLowerCase().includes('apagar thread_id')) {
               await handleDeleteThread(userId);
-              await sendReplyZAPI(phone, "Thread apagado com sucesso!");
+              await sendReplyZAPI(phone, "Histórico resetado com sucesso! 😊");
               return;
             }
-            await storeMessageInConversation(userId, threadId, { role: 'user', content: formattedMessage, timestamp: Date.now() });
+
+            await storeMessageInConversation(userId, threadId, {
+              role: 'user',
+              content: formattedMessage,
+              timestamp: Date.now()
+            });
             await addMessageWithRetry(threadId, formattedMessage);
+
           } else if (item.type === 'image') {
             try {
-              const description = await processImage(item.imageUrl, item.caption);
-              const instruction = `Descrição da imagem: ${description}`;
-              await storeMessageInConversation(userId, threadId, { role: 'user', content: instruction, timestamp: Date.now() });
+              const description = await processImage(item.content, item.meta.caption);
+              const instruction = `[Imagem] ${description} [Phone: ${phone}]`;
+              
+              await storeMessageInConversation(userId, threadId, {
+                role: 'user',
+                content: instruction,
+                timestamp: Date.now()
+              });
               await addMessageWithRetry(threadId, instruction);
             } catch (error) {
-              console.error('Erro ao processar imagem:', error);
+              console.error('Erro no processamento de imagem:', error);
+              await sendReplyZAPI(phone, "Ops! Não consegui entender essa imagem. 🫣 Pode descrever brevemente?");
             }
           }
         }
 
-        // Executa a interação com a OpenAI
-        const run = await openai.beta.threads.runs.create(threadId, { assistant_id: config.openai.assistantId });
-        await waitForRunCompletion(threadId, run.id);
+        // Executa interação com OpenAI
+        const run = await openai.beta.threads.runs.create(threadId, { 
+          assistant_id: config.openai.assistantId 
+        });
         
+        await waitForRunCompletion(threadId, run.id);
+
+        // Obtém e processa resposta
         const messagesResponse = await openai.beta.threads.messages.list(threadId);
-        const messages = messagesResponse.data.sort((a, b) => new Date(a.created_at || a.created) - new Date(b.created_at || b.created));
-        const assistantMessage = messages.filter(m => m.role === 'assistant').pop();
+        const messages = messagesResponse.data
+          .sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+        
+        const assistantMessage = messages
+          .filter(m => m.role === 'assistant')
+          .pop();
 
         if (!assistantMessage) {
-          throw new Error('Nenhuma mensagem do assistente encontrada.');
+          throw new Error('Nenhuma resposta do assistente encontrada');
         }
 
-        let assistantResponse = assistantMessage.content[0].text.value.replace(/\*\*(.*?)\*\*/g, '*$1*');
-        await storeMessageInConversation(userId, threadId, { role: 'assistant', content: assistantResponse, timestamp: Date.now() });
-        await sendReplyZAPI(phone, assistantResponse);
+        let response = assistantMessage.content[0].text.value
+          .replace(/\*\*/g, '*') // Formatação simplificada
+          .replace(/\[links protegidos\]/g, ''); // Limpeza de placeholders
+
+        await storeMessageInConversation(userId, threadId, {
+          role: 'assistant',
+          content: response,
+          timestamp: Date.now()
+        });
+
+        // Envia resposta via WhatsApp
+        await sendReplyZAPI(phone, response);
+
       } catch (error) {
-        console.error('Erro ao processar mensagens:', error);
+        console.error('Erro no processamento:', error);
+        await sendReplyZAPI(phone, 
+          "Estou tendo dificuldades técnicas... 🛠️ Por favor, tente novamente mais tarde! 😊"
+        );
       }
     }, BUFFER_DELAY));
+
   } catch (error) {
-    console.error('Erro no getChat:', error);
+    console.error('Erro crítico no getChat:', error);
+    await sendReplyZAPI(phone, 
+      "Algo deu errado no meu sistema... ⚠️ Nossa equipe já foi notificada!"
+    );
     throw error;
   }
 }
