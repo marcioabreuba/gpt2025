@@ -128,6 +128,8 @@ async function handleProductsInfo(toolCall) {
 }
 
 async function handleOrdersInfo(threadId, toolCall) {
+  console.log("Tool call:", toolCall);
+  console.log("threadId:", threadId);
   const { endpoint, order_number, cpf } = JSON.parse(toolCall.function.arguments);
   const phone = await extractPhoneFromContext(threadId);
   return getOrderByNumber(endpoint, order_number || cpf, phone);
