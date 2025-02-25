@@ -19,18 +19,45 @@ const openai = new OpenAI({ apiKey: config.openai.apiKey });
  */
 export async function downloadImage(url) {
   try {
-    const imagePath = path.join(__dirname, `temp_${Date.now()}.jpg`);
+    const imagePath = path.join(__dirname, `../temp/image_${Date.now()}.jpg`);
+    
+    // Garantir que a pasta temp existe
+    const tempDir = path.dirname(imagePath);
+    if (!fs.existsSync(tempDir)) {
+      fs.mkdirSync(tempDir, { recursive: true });
+    }
+    
     const writer = fs.createWriteStream(imagePath);
-
+    
+    // Configurando cabeçalhos para autenticação no Z-API
+    const headers = {};
+    
+    // Adicionar Client-Token da Z-API para autenticação
+    if (config.zapi.clientToken) {
+      headers['Client-Token'] = config.zapi.clientToken;
+    }
+    
+    // Para URLs do backblaze (storage da Z-API) pode ser necessário um token adicional
+    // Se o url contém backblazeb2.com ou temp-file-download
+    if (url.includes('backblazeb2.com') || url.includes('temp-file-download')) {
+      // Pode ser necessário usar um token específico dependendo da configuração do Z-API
+      // headers['Authorization'] = `Bearer ${config.zapi.token}`;
+      
+      // Ou, alternativamente, tentar acessar através da API do Z-API
+      // Modificar a URL para usar o endpoint de mídia do Z-API
+      const mediaId = url.split('/').pop().split('==.')[0] + '==';
+      url = `https://api.z-api.io/instances/${config.zapi.instanceId}/token/${config.zapi.token}/media/${mediaId}`;
+    }
+    
     const response = await axios({
       url,
       method: 'GET',
       responseType: 'stream',
-      headers: { Authorization: `Bearer ${config.graphApiToken}` }
+      headers
     });
-
+    
     response.data.pipe(writer);
-
+    
     return new Promise((resolve, reject) => {
       writer.on('finish', () => resolve(imagePath));
       writer.on('error', reject);
