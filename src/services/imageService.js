@@ -75,6 +75,81 @@ export async function describeImage(imagePath, caption = '') {
 }
 
 /**
+ * Analisa uma imagem e determina o tipo de conteúdo (produto, comprovante, etc.)
+ * @param {string} imagePath - Caminho local da imagem.
+ * @returns {Promise<Object>} - Tipo de imagem e detalhes identificados.
+ */
+export async function analyzeImageContent(imagePath) {
+  try {
+    const imageBuffer = fs.readFileSync(imagePath);
+    const base64Image = imageBuffer.toString('base64');
+    
+    // Usando um prompt específico para identificar o tipo de imagem
+    const messages = [
+      {
+        role: "user",
+        content: [
+          { 
+            type: "text", 
+            text: "Analise esta imagem e identifique se é: 1) Um produto (qual categoria?), 2) Um comprovante de pagamento (extraia data, valor e ID), ou 3) Outro tipo. Retorne em formato JSON com a estrutura: {tipo: 'produto|comprovante|outro', detalhes: {...}}" 
+          },
+          { 
+            type: "image_url", 
+            image_url: { url: `data:image/jpeg;base64,${base64Image}` } 
+          }
+        ]
+      }
+    ];
+
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o",
+      messages,
+      response_format: { type: "json_object" }
+    });
+
+    const analysisResult = JSON.parse(response.choices[0]?.message?.content || '{"tipo":"outro"}');
+    return analysisResult;
+  } catch (error) {
+    console.error('Erro ao analisar conteúdo da imagem:', error);
+    return { tipo: "erro", detalhes: error.message };
+  }
+}
+
+/**
+ * Processa imagem de produto: busca produtos similares no catálogo
+ * @param {string} productCategory - Categoria do produto identificado
+ * @param {string} description - Descrição detalhada do produto
+ * @returns {Promise<string>} - Links para produtos similares
+ */
+export async function findSimilarProducts(productCategory, description) {
+  try {
+    // Recuperar produtos do catálogo via API do Shopify
+    const productsResponse = await getProductsByCategory(productCategory);
+    
+    // Usar a IA para encontrar os mais similares com base na descrição
+    const messages = [
+      {
+        role: "user",
+        content: `Tenho um catálogo com ${productsResponse.length} produtos. 
+                  Um cliente enviou uma imagem de um produto descrito como: "${description}".
+                  Encontre os 3 produtos mais similares neste catálogo:
+                  ${JSON.stringify(productsResponse)}`
+      }
+    ];
+    
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o",
+      messages
+    });
+    
+    return response.choices[0]?.message?.content || 'Não encontrei produtos similares.';
+  } catch (error) {
+    console.error('Erro ao buscar produtos similares:', error);
+    return 'Não foi possível encontrar produtos similares no momento.';
+  }
+}
+
+/**
  * Processa a imagem: faz o download, obtém a descrição e remove o arquivo temporário.
  * @param {string} imageUrl - URL da imagem.
  * @param {string} caption - Legenda adicional (opcional).
@@ -84,7 +159,34 @@ export async function processImage(imageUrl, caption = '') {
   let imagePath;
   try {
     imagePath = await downloadImage(imageUrl);
-    return await describeImage(imagePath, caption);
+    
+    // Analisar o tipo de conteúdo da imagem
+    const analysis = await analyzeImageContent(imagePath);
+    
+    // Processar de acordo com o tipo
+    if (analysis.tipo === 'produto') {
+      // Se o cliente está procurando um produto
+      const productInfo = await findSimilarProducts(
+        analysis.detalhes.categoria, 
+        analysis.detalhes.descricao
+      );
+      
+      return `[Imagem de produto] ${analysis.detalhes.descricao}. 
+              Produtos similares encontrados: ${productInfo}`;
+              
+    } else if (analysis.tipo === 'comprovante') {
+      // Se for um comprovante de pagamento
+      return `[Comprovante de pagamento] 
+              Data: ${analysis.detalhes.data}, 
+              Valor: ${analysis.detalhes.valor}, 
+              ID Transação: ${analysis.detalhes.id}`;
+              
+    } else {
+      // Descrição genérica para outros tipos de imagem
+      const basicDescription = await describeImage(imagePath, caption);
+      return basicDescription;
+    }
+    
   } catch (error) {
     console.error('Erro ao processar imagem:', error);
     throw new Error('Erro no processamento da imagem');
