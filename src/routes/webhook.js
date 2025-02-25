@@ -2,6 +2,7 @@
 import express from 'express';
 import { getChat } from '../services/conversationService.js';
 import { processAudioMessage } from '../services/audioService.js';
+import { sendAudioReceiptConfirmation } from './zapiService.js';
 import logger from '../utils/logger.js';
 
 const router = express.Router();
@@ -19,10 +20,12 @@ router.post("/webhook", async (req, res, next) => {
     
     if (type === "ReceivedCallback" && fromMe === false && phone) {
       // Verificar se é uma mensagem de áudio
-      if (audio?.url || (media?.type === 'audio' && media?.url)) {
-        const audioUrl = audio?.url || media?.url;
-        logger.info(`Recebido áudio do usuário ${phone}`);
-        await processAudioMessage(chatLid, phone, audioUrl);
+      if (audio?.audioUrl) {
+        logger.info(`Recebido áudio do usuário ${phone} (${audio.seconds}s)`);
+        // Enviar confirmação imediata de que recebemos o áudio
+        await sendAudioReceiptConfirmation(phone);
+        // Processar o áudio
+        await processAudioMessage(chatLid, phone, audio.audioUrl);
       }
       // Verificar se é uma mensagem de texto
       else if (text?.message) {
@@ -30,21 +33,19 @@ router.post("/webhook", async (req, res, next) => {
         logger.info(`Usuário ${phone} → Sofia: "${message}"`);
         await getChat(chatLid, phone, message);
       }
-      // Outros tipos de mídia já implementados (como imagem)
+      // Outros tipos de mídia (como imagem)
       else if (media?.url) {
         logger.info(`Recebido mídia do usuário ${phone}: ${media.type}`);
-        // Verificar se você já tem implementação para imagens
-        // Se sim, chame a função correspondente aqui
+        // Chamar função específica para o tipo de mídia
       }
     }
     
-    // Sempre retorna 200 para o webhook, mesmo que ocorram problemas no processamento
+    // Sempre retorna 200 para o webhook, mesmo que ocorram problemas
     res.sendStatus(200);
   } catch (error) {
     logger.error("Erro no webhook", { error: error.message });
-    // Log do erro, mas ainda retorna 200 para o webhook
+    // Sempre retorna 200 para o webhook
     res.sendStatus(200);
-    // Passa o erro para o próximo middleware
     next(error);
   }
 });
