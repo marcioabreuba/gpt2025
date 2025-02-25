@@ -1,29 +1,50 @@
 // src/routes/webhook.js
 import express from 'express';
 import { getChat } from '../services/conversationService.js';
+import { processAudioMessage } from '../services/audioService.js';
 import logger from '../utils/logger.js';
 
 const router = express.Router();
 
 /**
  * POST /webhook
- * Recebe mensagens (texto ou imagem) e inicia o processamento da conversa.
+ * Recebe mensagens (texto, áudio ou imagem) e inicia o processamento da conversa.
  */
 router.post("/webhook", async (req, res, next) => {
   try {
     // Loga o payload recebido do webhook
     logger.info("Webhook recebido", { payload: req.body });
     
-    const { type, fromMe, chatLid, text, phone } = req.body;
+    const { type, fromMe, chatLid, text, phone, audio, media } = req.body;
+    
     if (type === "ReceivedCallback" && fromMe === false && phone) {
-      const message = text?.message || "";
-      // Loga a mensagem recebida do usuário
-      logger.info(`Usuário ${phone} → Sofia: "${message}"`);
-      await getChat(chatLid, phone, message);
+      // Verificar se é uma mensagem de áudio
+      if (audio?.url || (media?.type === 'audio' && media?.url)) {
+        const audioUrl = audio?.url || media?.url;
+        logger.info(`Recebido áudio do usuário ${phone}`);
+        await processAudioMessage(chatLid, phone, audioUrl);
+      }
+      // Verificar se é uma mensagem de texto
+      else if (text?.message) {
+        const message = text.message || "";
+        logger.info(`Usuário ${phone} → Sofia: "${message}"`);
+        await getChat(chatLid, phone, message);
+      }
+      // Outros tipos de mídia já implementados (como imagem)
+      else if (media?.url) {
+        logger.info(`Recebido mídia do usuário ${phone}: ${media.type}`);
+        // Verificar se você já tem implementação para imagens
+        // Se sim, chame a função correspondente aqui
+      }
     }
+    
+    // Sempre retorna 200 para o webhook, mesmo que ocorram problemas no processamento
     res.sendStatus(200);
   } catch (error) {
     logger.error("Erro no webhook", { error: error.message });
+    // Log do erro, mas ainda retorna 200 para o webhook
+    res.sendStatus(200);
+    // Passa o erro para o próximo middleware
     next(error);
   }
 });

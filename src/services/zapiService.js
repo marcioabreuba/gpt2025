@@ -39,3 +39,23 @@ export async function sendReplyZAPI(phone, message) {
     logger.error(`Falha ao enviar mensagem para ${phone}`, { error: errMsg });
   }
 }
+
+/**
+ * Envia uma mensagem de confirmação de recebimento de áudio.
+ * @param {string} phone - Número de telefone de destino.
+ */
+export async function sendAudioReceiptConfirmation(phone) {
+  try {
+    const message = "🎧 Recebi seu áudio e estou processando...";
+    logger.info(`IA → ${phone}: "${message}"`);
+    
+    const url = `https://api.z-api.io/instances/${config.zapi.instanceId}/token/${config.zapi.token}/send-text`;
+    const payload = { phone, message };
+    await axios.post(url, payload, {
+      headers: { "Client-Token": config.zapi.clientToken }
+    });
+  } catch (error) {
+    const errMsg = error.response?.data || error.message;
+    console.error("Erro ao enviar confirmação de áudio:", errMsg);
+  }
+}

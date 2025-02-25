@@ -21,7 +21,7 @@ const bufferTimeouts = new Map();
 const BUFFER_DELAY = 10000;
 const TOKEN_LIMIT = 200000;
 
-export async function getChat(userId, phone, message, imageUrl, caption = '') {
+export async function getChat(userId, phone, message, imageUrl, caption = '', isAudioTranscription = false) {
   try {
     if (!userId || (!message && !imageUrl)) {
       throw new Error('userId e message ou imageUrl são obrigatórios');
@@ -36,7 +36,11 @@ export async function getChat(userId, phone, message, imageUrl, caption = '') {
     messageBuffers.get(userId).push({
       type: imageUrl ? 'image' : 'text',
       content: imageUrl || message,
-      meta: { phone, caption }
+      meta: { 
+        phone, 
+        caption,
+        isAudioTranscription
+      }
     });
 
     // Reseta o timeout existente
@@ -83,7 +87,13 @@ export async function getChat(userId, phone, message, imageUrl, caption = '') {
         // Processa mensagens bufferizadas
         for (const item of bufferedMessages) {
           if (item.type === 'text') {
-            const formattedMessage = `${item.content} [Data: ${currentDate}] [Phone: ${phone}]`;
+            let formattedMessage = item.content;
+            
+            if (item.meta.isAudioTranscription) {
+              formattedMessage = `[Transcrição de áudio]: ${formattedMessage} [Data: ${currentDate}] [Phone: ${phone}]`;
+            } else {
+              formattedMessage = `${formattedMessage} [Data: ${currentDate}] [Phone: ${phone}]`;
+            }
             
             if (formattedMessage.toLowerCase().includes('apagar thread_id')) {
               await handleDeleteThread(userId);
