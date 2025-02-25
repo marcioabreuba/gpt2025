@@ -2,7 +2,7 @@
 import express from 'express';
 import { getChat } from '../services/conversationService.js';
 import { processAudioMessage } from '../services/audioService.js';
-import { sendAudioReceiptConfirmation } from './zapiService.js';
+import { sendAudioReceiptConfirmation } from '../services/zapiService.js';
 import logger from '../utils/logger.js';
 
 const router = express.Router();
