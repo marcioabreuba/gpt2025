@@ -1,4 +1,3 @@
-// src/index.js
 import 'dotenv/config';
 import express from 'express';
 import bodyParser from 'body-parser';
@@ -7,7 +6,10 @@ import config from './config.js';
 import limiter from './middlewares/rateLimiter.js';
 import { checkMessageSize } from './middlewares/messageSize.js';
 import { errorHandler } from './middlewares/errorHandler.js';
-import { PrismaClient } from '@prisma/client'
+import { PrismaClient } from '@prisma/client';
+
+// Importa o cronjob (ele roda automaticamente)
+import './services/cronjobTraining.js'
 
 // Rotas
 import statusRoutes from './routes/status.js';
@@ -15,21 +17,22 @@ import productsRoutes from './routes/products.js';
 import webhookRoutes from './routes/webhook.js';
 import ordersRoutes from './routes/orders.js';
 import pedidosRoutes from './routes/api/pedidos.js';
+import produtosRoutes from './routes/api/produtos.js';
+import trueRoutes from './routes/api/true.js';
 
+// Inicialização do Express
 const app = express();
-
-// Configuração inicial do banco de dados
 const prisma = new PrismaClient();
 
-
+// Inicializa o banco de dados
 const startDb = async () => {
   try {
     await prisma.$connect();
   } catch (error) {
+    console.error('❌ Erro ao conectar ao banco:', error);
     process.exit(1);
   }
 };
-
 
 // Middlewares
 app.use(bodyParser.json({ limit: '50mb' }));
@@ -38,22 +41,23 @@ app.use(limiter);
 app.use(cors({ origin: '*', credentials: true }));
 app.use(checkMessageSize);
 
-// Inicialização segura
+// Inicialização segura do servidor
 async function startServer() {
-  // 1. Primeiro verifica/cria as tabelas
   await startDb();
 
-  // 2. Depois registra as rotas
+  // Registra as rotas corretamente
   app.use(statusRoutes);
   app.use(productsRoutes);
   app.use(webhookRoutes);
   app.use('/api', ordersRoutes);
   app.use('/api', pedidosRoutes);
+  app.use('/api', produtosRoutes);
+  app.use('/api', trueRoutes);
 
-  // 3. Tratamento de erros deve ser o último middleware
+  // Tratamento de erros (deve ser o último middleware)
   app.use(errorHandler);
 
-  // 4. Inicia o servidor
+  // Inicia o servidor
   app.listen(config.port, () => {
     console.log(`🚀 Servidor rodando na porta ${config.port}`);
   });
