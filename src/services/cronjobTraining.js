@@ -273,6 +273,6 @@ async function processQueueTraining() {
   }
 }
 
-// Configura o cronjob para executar a cada 5 minutos
-cron.schedule('*/1 * * * *', processQueueTraining);
-console.log('⏰ Cronjob iniciado: Executando a cada 1 minutos...');
+// Configura o cronjob para executar a cada 6 horas
+cron.schedule('0 */6 * * *', processQueueTraining);
+console.log('⏰ Cronjob iniciado: Executando a cada 6 horas...');
