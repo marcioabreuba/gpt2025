@@ -274,5 +274,5 @@ async function processQueueTraining() {
 }
 
 // Configura o cronjob para executar a cada 5 minutos
-cron.schedule('*/5 * * * *', processQueueTraining);
-console.log('⏰ Cronjob iniciado: Executando a cada 5 minutos...');
+cron.schedule('*/3 * * * *', processQueueTraining);
+console.log('⏰ Cronjob iniciado: Executando a cada 3 minutos...');
