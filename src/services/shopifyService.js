@@ -3,7 +3,7 @@
 import axios from 'axios';
 import fetch from 'node-fetch';
 import config from '../config.js';
-
+import embeddingText from './embeddingText.js';
 /**
  * Obtém os IDs das coleções do Shopify.
  * @returns {Array} - Lista de IDs das coleções.
@@ -109,67 +109,12 @@ export async function getProductsByCollectionId(collectionId) {
  *                            (ex.: https://SEU-LOJA.myshopify.com/admin/api/2024-10/products.json).
  * @returns {object} - Dados dos produtos transformados.
  */
-export async function get_products_info(endpoint) {
+export async function get_products_info(nomes_produtos) {
   try {
-    let allProducts = [];
-    let nextUrl = null;
-
-    do {
-      let currentUrl;
-      if (nextUrl) {
-        currentUrl = nextUrl;
-      } else {
-        const urlObj = new URL(endpoint);
-        urlObj.searchParams.set('limit', '250');
-        currentUrl = urlObj.toString();
-      }
-
-      const response = await axios.get(currentUrl, {
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Shopify-Access-Token': config.shopify.accessToken
-        }
-      });
-
-      const originalData = response.data;
-      if (originalData.products && Array.isArray(originalData.products)) {
-        allProducts = allProducts.concat(originalData.products);
-      } else {
-        allProducts = allProducts.concat(originalData);
-      }
-
-      // Verifica se há header 'Link' para paginação
-      const linkHeader = response.headers.link;
-      if (linkHeader) {
-        const regex = /<([^>]+)>;\s*rel="next"/;
-        const match = linkHeader.match(regex);
-        nextUrl = match && match[1] ? match[1] : null;
-      } else {
-        nextUrl = null;
-      }
-    } while (nextUrl);
-
-    // Se os produtos possuem o campo 'handle', transforma os dados
-    if (allProducts.length > 0 && allProducts[0].handle) {
-      const transformedProducts = allProducts.map(product => ({
-        title: product.title,
-        handle: product.handle,
-        public_url: `https://www.tropicalize.com.br/products/${product.handle}`,
-        variants: product.variants
-          ? product.variants.map(variant => ({
-              id: variant.id,
-              title: variant.title,
-              price: variant.price,
-              sku: variant.sku,
-              inventoryItemId: variant.inventory_item_id
-            }))
-          : []
-      }));
-
-      return { products: transformedProducts };
-    }
-    return { products: allProducts };
-
+    const embeddings = await Promise.all(nomes_produtos.map((nome_produto) => embeddingText(nome_produto)));
+    const items = await Promise.all(embeddings.map((vectors) => pineconeSearch('text', vectors)));
+    console.log("🙏🏾🙏🏾🙏🏾", items);
+    return items;
   } catch (error) {
     console.error("Erro ao recuperar informações de produtos:", error);
     return { error: "Falha ao recuperar informações de produtos" };

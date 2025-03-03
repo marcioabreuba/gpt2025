@@ -123,8 +123,8 @@ async function handleToolCalls(threadId, run) {
 }
 
 async function handleProductsInfo(toolCall) {
-  const { endpoint } = JSON.parse(toolCall.function.arguments);
-  return get_products_info(endpoint);
+  const { nomes_produtos } = JSON.parse(toolCall.function.arguments);
+  return get_products_info(nomes_produtos);
 }
 
 async function handleOrdersInfo(threadId, toolCall) {
