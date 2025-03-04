@@ -4,7 +4,7 @@ import config from '../config.js';
 // Inicializa o cliente Pinecone para lidar com vetores de texto e imagem
 const pc = new Pinecone({
     apiKey: config.pinecone.apiKey,
-    environment: config.pinecone.environment
+    controllerHostUrl: `https://controller.${config.pinecone.environment}.pinecone.io`
 });
 
 // Função assíncrona para buscar no Pinecone que indica se é texto ou imagem 
