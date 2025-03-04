@@ -1,9 +1,10 @@
 import { Pinecone } from '@pinecone-database/pinecone';
+import config from '../config.js';
 
 // Inicializa o cliente Pinecone para lidar com vetores de texto e imagem
 const pc = new Pinecone({
-    apiKey: process.env.PINECONE_API_KEY,
-    controllerHostUrl: "https://controller.us-west1-gcp.pinecone.io"
+    apiKey: config.pinecone.apiKey,
+    environment: config.pinecone.environment
 });
 
 // Função assíncrona para buscar no Pinecone que indica se é texto ou imagem 
@@ -11,8 +12,8 @@ async function pineconeSearch(type, query) {
   try { 
     // Determina qual índice usar com base no tipo
     const index = type === 'text' ? 
-      pc.index('tropicalize-products-rzi4pqr') : 
-      pc.index('image-rzi4pqr');
+      pc.index(config.pinecone.index) : 
+      pc.index('image');
     
     // Configuração dos parâmetros da busca
     const searchParams = {
