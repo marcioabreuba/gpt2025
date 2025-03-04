@@ -3,8 +3,7 @@ import config from '../config.js';
 
 // Inicializa o cliente Pinecone para lidar com vetores de texto e imagem
 const pc = new Pinecone({
-    apiKey: config.pinecone.apiKey,
-    controllerHostUrl: `https://controller.${config.pinecone.environment}.pinecone.io`
+    apiKey: config.pinecone.apiKey
 });
 
 // Função assíncrona para buscar no Pinecone que indica se é texto ou imagem 
@@ -12,8 +11,8 @@ async function pineconeSearch(type, query) {
   try { 
     // Determina qual índice usar com base no tipo
     const index = type === 'text' ? 
-      pc.index(config.pinecone.index) : 
-      pc.index('image');
+      await pc.index(config.pinecone.index) : 
+      await pc.index('image');
     
     // Configuração dos parâmetros da busca
     const searchParams = {
