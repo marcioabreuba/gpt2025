@@ -3,6 +3,7 @@
 import axios from 'axios';
 import fetch from 'node-fetch';
 import config from '../config.js';
+import pineconeSearch from './BuscaPinecone.js';
 import embeddingText from './embeddingText.js';
 /**
  * Obtém os IDs das coleções do Shopify.

@@ -1,5 +1,4 @@
-const axios = require('axios');
-
+import axios from 'axios';
 /**
  * Função para gerar embeddings de texto usando OpenAI
  */
