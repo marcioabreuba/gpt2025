@@ -5,6 +5,14 @@ import fetch from 'node-fetch';
 import config from '../config.js';
 import pineconeSearch from './BuscaPinecone.js';
 import embeddingText from './embeddingText.js';
+import Shopify from 'shopify-api-node';
+
+
+const shopify = new Shopify({
+  shopName: config.shopify.shopDomain,
+  accessToken: config.shopify.accessToken
+});
+
 /**
  * Obtém os IDs das coleções do Shopify.
  * @returns {Array} - Lista de IDs das coleções.
@@ -102,15 +110,16 @@ export async function getProductsByCollectionId(collectionId) {
 
 export const buscarProdutoPorId = async (productId) => {
   try {
+    console.log("ProductId", productId);
     // Busca o produto específico pelo ID
-    const product = await shopify.product.get(productId);
+    const productItem = await shopify.product.get(productId);
     
     // Retorna as informações do produto para o assistant
     return {
-      public_url: `https://www.tropicalize.com.br/products/${product.handle}`,
-      title: product.title,
-      price: product.variants[0].price,
-      description: product.body_html,
+      public_url: `https://www.tropicalize.com.br/products/${productItem.handle}`,
+      title: productItem.title,
+      price: productItem.variants[0].price,
+      description: productItem.body_html,
     }
   } catch (error) {
     console.error(`Erro ao buscar produto com ID ${productId}:`, error);
