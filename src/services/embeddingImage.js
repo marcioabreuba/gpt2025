@@ -1,4 +1,4 @@
-const axios = require('axios');
+import axios from 'axios';
 
 /**
  * Função para gerar embeddings de imagem usando Jina AI
@@ -12,4 +12,4 @@ async function embeddingImage(imageUrl) {
     return response.data.embedding;
 }
 
-module.exports = embeddingImage;
+export default embeddingImage;

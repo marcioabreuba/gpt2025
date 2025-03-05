@@ -1,9 +1,9 @@
-import axios from 'axios';
 import fetch from 'node-fetch';
 import config from '../config.js';
 import pineconeSearch from './BuscaPinecone.js';
 import embeddingText from './embeddingText.js';
 import Shopify from 'shopify-api-node';
+import embeddingImage from './embeddingImage.js';
 
 const shopify = new Shopify({
   shopName: config.shopify.shopDomain,
@@ -93,12 +93,12 @@ export async function getProductsByCollectionId(collectionId) {
     public_url: `https://www.tropicalize.com.br/products/${product.handle}`,
     variants: product.variants
       ? product.variants.map(variant => ({
-          id: variant.id,
-          title: variant.title,
-          price: variant.price,
-          sku: variant.sku,
-          inventoryItemId: variant.inventory_item_id
-        }))
+        id: variant.id,
+        title: variant.title,
+        price: variant.price,
+        sku: variant.sku,
+        inventoryItemId: variant.inventory_item_id
+      }))
       : []
   }));
 
@@ -114,7 +114,7 @@ export const buscarProdutoPorId = async (productId) => {
 
     console.log(`Buscando produto com ID: ${productId}`);
     const productItem = await shopify.product.get(productId);
-    
+
     return {
       public_url: `https://www.tropicalize.com.br/products/${productItem.handle}`,
       title: productItem.title,
@@ -169,7 +169,7 @@ export async function get_products_info(nomes_produtos) {
     const productsString = products.map(product => {
       // Remover tags HTML da descrição
       const cleanDescription = product.description.replace(/<[^>]*>/g, '').trim();
-      
+
       return `Título: ${product.title}. Preço: R$ ${product.price}. Descrição: ${cleanDescription}. Link do produto: ${product.public_url}.`;
     }).join(' ');
 
@@ -178,9 +178,62 @@ export async function get_products_info(nomes_produtos) {
     return productsString;
   } catch (error) {
     console.error("Erro detalhado ao recuperar informações de produtos:", error);
-    return { 
-      error: "Falha ao recuperar informações de produtos", 
-      detailedError: error.message 
+    return {
+      error: "Falha ao recuperar informações de produtos",
+      detailedError: error.message
+    };
+  }
+}
+export async function get_products_info_by_image(imageUrl) {
+  try {
+    console.log("ImageUrl", imageUrl);
+
+    // Gerar embeddings
+    const vectorsImage = await embeddingImage(imageUrl); // importar
+    console.log("Embeddings gerados:", vectorsImage);
+
+    // Buscar itens no Pinecone
+    const itemsSearch = await pineconeSearch('image', vectorsImage);
+    console.log("Itens encontrados no Pinecone:", JSON.stringify(itemsSearch, null, 2));
+
+    // Achatar o array de items e remover productIds duplicados
+    const flattenedItems = [...new Set(itemsSearch.flat().map(item => JSON.stringify(item)))]
+      .map(item => JSON.parse(itemsSearch));
+    console.log("Itens achatados sem duplicatas:", flattenedItems);
+
+    // Função para adicionar delay
+    const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+    // Preparar busca de produtos com limite de 8 itens
+    const productsPromises = flattenedItems.slice(0, 8)
+      .filter(item => item.productId !== undefined)
+      .map(async (item, index) => {
+        // Adicionar delay proporcional para cada requisição
+        await delay(index * 3000);
+        return buscarProdutoPorId(item.productId);
+      });
+
+    // Executar as promises e filtrar produtos válidos
+    const products = (await Promise.all(productsPromises)).filter(product => product !== null);
+
+    console.log("Produtos finais:", products);
+
+    // Converter produtos em uma string formatada
+    const productsString = products.map(product => {
+      // Remover tags HTML da descrição
+      const cleanDescription = product.description.replace(/<[^>]*>/g, '').trim();
+
+      return `Título: ${product.title}. Preço: R$ ${product.price}. Descrição: ${cleanDescription}. Link do produto: ${product.public_url}.`;
+    }).join(' ');
+
+    console.log("String de produtos:", productsString);
+
+    return productsString;
+  } catch (error) {
+    console.error("Erro detalhado ao recuperar informações de produtos:", error);
+    return {
+      error: "Falha ao recuperar informações de produtos",
+      detailedError: error.message
     };
   }
 }

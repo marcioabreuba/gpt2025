@@ -11,7 +11,7 @@ import {
   handleDeleteThread,
   waitForRunCompletion
 } from './openaiService.js';
-import { processImage } from './imageService.js';
+import { processImage } from './servidorImagem.js';
 import { sendReplyZAPI } from './zapiService.js';
 import OpenAI from 'openai';
 
@@ -110,7 +110,7 @@ export async function getChat(userId, phone, message, imageUrl, caption = '', is
 
           } else if (item.type === 'image') {
             try {
-              const description = await processImage(item.content, item.meta.caption);
+              const description = await processImage(item.content);
               const instruction = `[Imagem] ${description} [Phone: ${phone}]`;
               
               await storeMessageInConversation(userId, threadId, {
