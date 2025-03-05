@@ -11,8 +11,8 @@ async function pineconeSearch(type, query) {
   try { 
     // Determina qual índice usar com base no tipo
     const index = type === 'text' ? 
-      await pc.index(config.pinecone.index): 
-      await pc.index(config.pinecone.image);
+      await pc.index(config.pinecone.index) : 
+      await pc.index('image');
     
     // Configuração dos parâmetros da busca
     const searchParams = {

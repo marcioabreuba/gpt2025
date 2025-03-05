@@ -105,6 +105,7 @@ async function handleToolCalls(threadId, run) {
   let output;
   switch(toolCall.function.name) {
     case "get_products_info":
+      console.log("toolCall", toolCall);
       output = await handleProductsInfo(toolCall);
       break;
     case "get_orders_info":
@@ -124,6 +125,7 @@ async function handleToolCalls(threadId, run) {
 
 async function handleProductsInfo(toolCall) {
   const { nomes_produtos } = JSON.parse(toolCall.function.arguments);
+  console.log("nomes_produtos", nomes_produtos);
   return get_products_info(nomes_produtos);
 }
 

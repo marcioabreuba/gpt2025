@@ -113,8 +113,9 @@ export async function getProductsByCollectionId(collectionId) {
 export async function get_products_info(nomes_produtos) {
   try {
     const embeddings = await Promise.all(nomes_produtos.map((nome_produto) => embeddingText(nome_produto)));
+    console.log("Embeddings", embeddings);
     const items = await Promise.all(embeddings.map((vectors) => pineconeSearch('text', vectors)));
-    console.log("🙏🏾🙏🏾🙏🏾", items);
+    console.log("Items", items);
     return items;
   } catch (error) {
     console.error("Erro ao recuperar informações de produtos:", error);
