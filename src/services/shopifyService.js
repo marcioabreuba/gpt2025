@@ -165,7 +165,17 @@ export async function get_products_info(nomes_produtos) {
 
     console.log("Produtos finais:", products);
 
-    return products;
+    // Converter produtos em uma string formatada
+    const productsString = products.map(product => {
+      // Remover tags HTML da descrição
+      const cleanDescription = product.description.replace(/<[^>]*>/g, '').trim();
+      
+      return `Título: ${product.title}. Preço: R$ ${product.price}. Descrição: ${cleanDescription}. Link do produto: ${product.public_url}.`;
+    }).join(' ');
+
+    console.log("String de produtos:", productsString);
+
+    return productsString;
   } catch (error) {
     console.error("Erro detalhado ao recuperar informações de produtos:", error);
     return { 
