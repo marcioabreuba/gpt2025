@@ -100,25 +100,36 @@ export async function getProductsByCollectionId(collectionId) {
   return productsWithInventory;
 }
 
-/**
- * Obtém informações de produtos a partir de um endpoint arbitrário com paginação.
- * Caso o JSON retornado seja no formato { products: [...] },
- * cada produto receberá 'public_url' amigável baseado no 'handle'
- * e são removidos campos de imagem/CDN.
- *
- * @param {string} endpoint - URL para obtenção das informações
- *                            (ex.: https://SEU-LOJA.myshopify.com/admin/api/2024-10/products.json).
- * @returns {object} - Dados dos produtos transformados.
- */
+export const buscarProdutoPorId = async (productId) => {
+  try {
+    // Busca o produto específico pelo ID
+    const product = await shopify.product.get(productId);
+    
+    // Retorna as informações do produto para o assistant
+    return {
+      public_url: `https://www.tropicalize.com.br/products/${product.handle}`,
+      title: product.title,
+      price: product.variants[0].price,
+      description: product.body_html,
+    }
+  } catch (error) {
+    console.error(`Erro ao buscar produto com ID ${productId}:`, error);
+    return null;
+  }
+};
+
 export async function get_products_info(nomes_produtos) {
   try {
     const embeddings = await Promise.all(nomes_produtos.map((nome_produto) => embeddingText(nome_produto)));
     console.log("Embeddings", embeddings);
     const items = await Promise.all(embeddings.map((vectors) => pineconeSearch('text', vectors)));
     console.log("Items", items);
-    return items;
+    const products = await Promise.all(items.map((item) => buscarProdutoPorId(item.metadata.productId)));
+    console.log("Products", products);
+    return products;
   } catch (error) {
     console.error("Erro ao recuperar informações de produtos:", error);
     return { error: "Falha ao recuperar informações de produtos" };
   }
 }
+
