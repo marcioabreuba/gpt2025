@@ -28,7 +28,7 @@ export async function sendReplyZAPI(phone, message) {
     logger.info(`IA → ${phone}: ${message}`);
     
     const url = `https://api.z-api.io/instances/${config.zapi.instanceId}/token/${config.zapi.token}/send-text`;
-    const payload = { phone, message };
+    const payload = { phone, message, delayTyping: 15 };
     const response = await axios.post(url, payload, {
       headers: { "Client-Token": config.zapi.clientToken }
     });

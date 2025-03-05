@@ -19,12 +19,23 @@ async function pineconeSearch(type, query) {
     // Executa a busca no índice apropriado
     const results = await index.query(searchParams);
     
-    // Filtragem opcional dos resultados após a recuperação
-    const filteredResults = results.matches
-      .filter(match => match.score > 0.5)
-      .map(match => ( 
-        match.metadata
-      ));
+    // Verifica se há algum resultado com score acima de 0.9
+    const highScoreResults = results.matches.filter(match => match.score > 0.9);
+    
+    let filteredResults;
+    
+    if (highScoreResults.length > 0) {
+      // Se houver resultados com score acima de 0.9, retorna apenas o de maior score
+      const highestScoreMatch = highScoreResults.reduce((highest, current) => 
+        current.score > highest.score ? current : highest, highScoreResults[0]);
+      
+      filteredResults = [highestScoreMatch.metadata];
+    } else {
+      // Caso contrário, mantém o comportamento original (scores > 0.5)
+      filteredResults = results.matches
+        .filter(match => match.score > 0.5)
+        .map(match => match.metadata);
+    }
     
     return filteredResults;
   } catch (error) {
