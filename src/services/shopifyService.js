@@ -130,30 +130,47 @@ export const buscarProdutoPorId = async (productId) => {
 export async function get_products_info(nomes_produtos) {
   try {
     console.log("Nomes de produtos recebidos:", nomes_produtos);
-    
-    const embeddings = await Promise.all(nomes_produtos.map((nome_produto) => embeddingText(nome_produto)));
-    console.log("Embeddings gerados:", embeddings);
-    
-    const items = await Promise.all(embeddings.map((vectors) => pineconeSearch('text', vectors)));
-    console.log("Itens encontrados no Pinecone:", JSON.stringify(items, null, 2));
-    
-    // Achatar o array de items
-    const flattenedItems = items.flat();
-    console.log("Itens achatados:", flattenedItems);
-    
-    // Buscar produtos para cada item, garantindo que só itens com productId sejam processados
-    const products = await Promise.all(
-      flattenedItems
-        .filter(item => item.productId !== undefined)
-        .map(item => buscarProdutoPorId(item.productId))
-    );
 
-    const validProducts = products.filter(product => product !== null);
-    console.log("Produtos finais:", validProducts);
-    
-    return validProducts;
+    // Gerar embeddings
+    const embeddings = await Promise.all(
+      nomes_produtos.map((nome_produto) => embeddingText(nome_produto))
+    );
+    console.log("Embeddings gerados:", embeddings);
+
+    // Buscar itens no Pinecone
+    const items = await Promise.all(
+      embeddings.map((vectors) => pineconeSearch('text', vectors))
+    );
+    console.log("Itens encontrados no Pinecone:", JSON.stringify(items, null, 2));
+
+    // Achatar o array de items e remover productIds duplicados
+    const flattenedItems = [...new Set(items.flat().map(item => JSON.stringify(item)))]
+      .map(item => JSON.parse(item));
+    console.log("Itens achatados sem duplicatas:", flattenedItems);
+
+    // Função para adicionar delay
+    const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+    // Preparar busca de produtos com limite de 8 itens
+    const productsPromises = flattenedItems.slice(0, 8)
+      .filter(item => item.productId !== undefined)
+      .map(async (item, index) => {
+        // Adicionar delay proporcional para cada requisição
+        await delay(index * 3000);
+        return buscarProdutoPorId(item.productId);
+      });
+
+    // Executar as promises e filtrar produtos válidos
+    const products = (await Promise.all(productsPromises)).filter(product => product !== null);
+
+    console.log("Produtos finais:", products);
+
+    return products;
   } catch (error) {
     console.error("Erro detalhado ao recuperar informações de produtos:", error);
-    return { error: "Falha ao recuperar informações de produtos", detailedError: error.message };
+    return { 
+      error: "Falha ao recuperar informações de produtos", 
+      detailedError: error.message 
+    };
   }
 }
