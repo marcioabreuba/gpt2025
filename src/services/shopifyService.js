@@ -124,7 +124,7 @@ export async function get_products_info(nomes_produtos) {
     console.log("Embeddings", embeddings);
     const items = await Promise.all(embeddings.map((vectors) => pineconeSearch('text', vectors)));
     console.log("Items", items);
-    const products = await Promise.all(items.map((item) => buscarProdutoPorId(item.metadata.productId)));
+    const products = await Promise.all(items.map((item) => buscarProdutoPorId(item.productId)));
     console.log("Products", products);
     return products;
   } catch (error) {

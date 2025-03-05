@@ -22,10 +22,9 @@ async function pineconeSearch(type, query) {
     // Filtragem opcional dos resultados após a recuperação
     const filteredResults = results.matches
       .filter(match => match.score > 0.5)
-      .map(match => ({ 
-        metadata: match.metadata,
-        score: match.score 
-      }));
+      .map(match => ( 
+        match.metadata
+      ));
     
     return filteredResults;
   } catch (error) {
