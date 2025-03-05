@@ -1,9 +1,9 @@
+import axios from 'axios';
 import fetch from 'node-fetch';
 import config from '../config.js';
 import pineconeSearch from './BuscaPinecone.js';
 import embeddingText from './embeddingText.js';
 import Shopify from 'shopify-api-node';
-import embeddingImage from './embeddingImage.js';
 
 const shopify = new Shopify({
   shopName: config.shopify.shopDomain,
@@ -184,6 +184,26 @@ export async function get_products_info(nomes_produtos) {
     };
   }
 }
+
+async function embeddingImage(imageUrl) {
+  const response = await axios.post(
+    'https://api.jina.ai/v1/embeddings',
+    {
+      input: [{ image: imageUrl }],  // Formato correto para imagens
+      model: "jina-clip-v2",             // Modelo conforme documentação
+      dimensions: 1024,                  // Dimensão explícita 
+      normalized: true                   // Vetores normalizados
+    },
+    { 
+      headers: { 
+        'Authorization': `Bearer ${process.env.JINA_API_KEY}`,
+        'Content-Type': 'application/json'
+      } 
+    }
+  );
+  return response.data.data[0]?.embedding;
+}
+
 export async function get_products_info_by_image(imageUrl) {
   try {
     console.log("ImageUrl", imageUrl);
@@ -198,7 +218,7 @@ export async function get_products_info_by_image(imageUrl) {
 
     // Achatar o array de items e remover productIds duplicados
     const flattenedItems = [...new Set(itemsSearch.flat().map(item => JSON.stringify(item)))]
-      .map(item => JSON.parse(itemsSearch));
+      .map(item => JSON.parse(item));
     console.log("Itens achatados sem duplicatas:", flattenedItems);
 
     // Função para adicionar delay

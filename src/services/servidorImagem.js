@@ -1,4 +1,4 @@
-import { get_products_info_by_image } from "../services/shopifyService.js";
+import { get_products_info_by_image } from "./shopifyService.js";
 
 export async function processImage(imageUrl) {
   try {
