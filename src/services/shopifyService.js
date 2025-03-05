@@ -1,12 +1,9 @@
-// src/services/shopifyService.js
-
 import axios from 'axios';
 import fetch from 'node-fetch';
 import config from '../config.js';
 import pineconeSearch from './BuscaPinecone.js';
 import embeddingText from './embeddingText.js';
 import Shopify from 'shopify-api-node';
-
 
 const shopify = new Shopify({
   shopName: config.shopify.shopDomain,
@@ -110,11 +107,14 @@ export async function getProductsByCollectionId(collectionId) {
 
 export const buscarProdutoPorId = async (productId) => {
   try {
-    console.log("ProductId", productId);
-    // Busca o produto específico pelo ID
+    if (!productId) {
+      console.warn("ProductId não fornecido");
+      return null;
+    }
+
+    console.log(`Buscando produto com ID: ${productId}`);
     const productItem = await shopify.product.get(productId);
     
-    // Retorna as informações do produto para o assistant
     return {
       public_url: `https://www.tropicalize.com.br/products/${productItem.handle}`,
       title: productItem.title,
@@ -129,16 +129,31 @@ export const buscarProdutoPorId = async (productId) => {
 
 export async function get_products_info(nomes_produtos) {
   try {
+    console.log("Nomes de produtos recebidos:", nomes_produtos);
+    
     const embeddings = await Promise.all(nomes_produtos.map((nome_produto) => embeddingText(nome_produto)));
-    console.log("Embeddings", embeddings);
+    console.log("Embeddings gerados:", embeddings);
+    
     const items = await Promise.all(embeddings.map((vectors) => pineconeSearch('text', vectors)));
-    console.log("Items", items);
-    const products = await Promise.all(items.map((item) => buscarProdutoPorId(item.productId)));
-    console.log("Products", products);
-    return products;
+    console.log("Itens encontrados no Pinecone:", JSON.stringify(items, null, 2));
+    
+    // Achatar o array de items
+    const flattenedItems = items.flat();
+    console.log("Itens achatados:", flattenedItems);
+    
+    // Buscar produtos para cada item, garantindo que só itens com productId sejam processados
+    const products = await Promise.all(
+      flattenedItems
+        .filter(item => item.productId !== undefined)
+        .map(item => buscarProdutoPorId(item.productId))
+    );
+
+    const validProducts = products.filter(product => product !== null);
+    console.log("Produtos finais:", validProducts);
+    
+    return validProducts;
   } catch (error) {
-    console.error("Erro ao recuperar informações de produtos:", error);
-    return { error: "Falha ao recuperar informações de produtos" };
+    console.error("Erro detalhado ao recuperar informações de produtos:", error);
+    return { error: "Falha ao recuperar informações de produtos", detailedError: error.message };
   }
 }
-
