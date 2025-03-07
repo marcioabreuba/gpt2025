@@ -32,6 +32,40 @@ const convoLogStream = createSafeWriteStream(path.join(logDir, 'conversation.log
 // Flag para controlar a saída para o console
 const PRINT_TO_CONSOLE = true;
 
+// Salva as funções originais do console antes de sobrescrevê-las
+const originalConsole = {
+  log: console.log,
+  error: console.error,
+  warn: console.warn,
+  info: console.info,
+  debug: console.debug
+};
+
+// Flag para evitar loops infinitos de logging
+let isLogging = false;
+
+// Cache de mensagens recentes para evitar duplicação
+const recentMessages = new Set();
+const MESSAGE_CACHE_SIZE = 100;
+const MESSAGE_CACHE_TTL = 2000; // 2 segundos
+
+// Função para adicionar à cache com tempo de expiração
+function addToRecentMessages(message) {
+  // Limpa cache se ficar muito grande
+  if (recentMessages.size > MESSAGE_CACHE_SIZE) {
+    recentMessages.clear();
+  }
+  
+  // Adiciona mensagem com expiração
+  recentMessages.add(message);
+  setTimeout(() => {
+    recentMessages.delete(message);
+  }, MESSAGE_CACHE_TTL);
+  
+  // Retorna true se a mensagem já existia
+  return recentMessages.has(message);
+}
+
 // Função auxiliar para formatar a data/hora atual
 function timestamp() {
   const now = new Date();
@@ -52,24 +86,40 @@ function shouldIgnoreMessage(message) {
 
 // Função auxiliar para escrever logs
 function writeLog(stream, level, message) {
-  // Ignora avisos de depreciação e outros avisos internos do Node
-  if (shouldIgnoreMessage(message)) {
-    return;
-  }
-
-  const time = timestamp();
-  const formattedMessage = `${time} [${level.toUpperCase()}] ${message}\n`;
+  // Previne loops infinitos
+  if (isLogging) return;
+  isLogging = true;
   
-  // Escreve no console
-  if (PRINT_TO_CONSOLE) {
-    process.stdout.write(formattedMessage);
-  }
-  
-  // Escreve no arquivo
   try {
-    stream.write(formattedMessage);
-  } catch (error) {
-    console.error(`Erro ao escrever no log:`, error);
+    // Ignora avisos de depreciação e outros avisos internos do Node
+    if (shouldIgnoreMessage(message)) {
+      isLogging = false;
+      return;
+    }
+  
+    // Verifica se a mensagem é recente duplicada
+    const messageKey = `${level}:${message}`;
+    if (addToRecentMessages(messageKey)) {
+      isLogging = false;
+      return;
+    }
+  
+    const time = timestamp();
+    const formattedMessage = `${time} [${level.toUpperCase()}] ${message}\n`;
+    
+    // Escreve no console usando a função original
+    if (PRINT_TO_CONSOLE) {
+      process.stdout.write(formattedMessage);
+    }
+    
+    // Escreve no arquivo
+    try {
+      stream.write(formattedMessage);
+    } catch (error) {
+      originalConsole.error(`Erro ao escrever no log:`, error);
+    }
+  } finally {
+    isLogging = false;
   }
 }
 
@@ -137,30 +187,42 @@ const logger = {
   // Funções para mensagens de conversação
   userMessage: (phone, message) => {
     const formattedMessage = `👤 ${phone} → Sofia: "${message}"`;
-    // Não escrever no log padrão, apenas no de conversas, para evitar duplicação
+    
+    // Adicionar à cache para evitar duplicação
+    const messageKey = `USER:${phone}:${message}`;
+    if (addToRecentMessages(messageKey)) {
+      return;
+    }
+    
+    // Escrever no arquivo de conversas
     convoLogStream.write(`${timestamp()} ${formattedMessage}\n`);
     
-    // Escrever apenas no console se necessário
+    // Escrever no console usando a função original
     if (PRINT_TO_CONSOLE) {
-      console.info(`📱 ${formattedMessage}`);
+      process.stdout.write(`${timestamp()} [INFO] 📱 ${formattedMessage}\n`);
     }
   },
   
   iaMessage: (phone, message) => {
     const formattedMessage = `🤖 Sofia → ${phone}: "${message}"`;
-    // Não escrever no log padrão, apenas no de conversas, para evitar duplicação
+    
+    // Adicionar à cache para evitar duplicação
+    const messageKey = `IA:${phone}:${message.substring(0, 50)}`;
+    if (addToRecentMessages(messageKey)) {
+      return;
+    }
+    
+    // Escrever no arquivo de conversas
     convoLogStream.write(`${timestamp()} ${formattedMessage}\n`);
     
-    // Escrever apenas no console se necessário
+    // Escrever no console usando a função original
     if (PRINT_TO_CONSOLE) {
-      console.info(`🔄 ${formattedMessage}`);
+      process.stdout.write(`${timestamp()} [INFO] 🔄 ${formattedMessage}\n`);
     }
   }
 };
 
 // Override dos console.* para usar o logger
-const originalConsoleError = console.error;
-
 console.log = (...args) => logger.info(...args);
 console.error = (...args) => {
   const message = format(...args);
@@ -168,7 +230,7 @@ console.error = (...args) => {
   if (shouldIgnoreMessage(message)) {
     if (process.env.NODE_ENV === 'development') {
       // Em desenvolvimento, ainda mostra no console original
-      originalConsoleError(...args);
+      originalConsole.error(...args);
     }
     return;
   }

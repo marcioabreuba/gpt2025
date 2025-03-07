@@ -24,8 +24,9 @@ const TOKEN_LIMIT = 200000;
 
 export async function getChat(userId, phone, message, imageUrl, caption = '', isAudioTranscription = false) {
   try {
-    // Registrar a mensagem recebida
-    logger.userMessage(phone, message);
+    // A mensagem já é registrada no webhook, não precisamos registrar novamente aqui
+    // Removendo para evitar duplicação
+    // logger.userMessage(phone, message);
 
     if (!userId || (!message && !imageUrl)) {
       throw new Error('userId e message ou imageUrl são obrigatórios');

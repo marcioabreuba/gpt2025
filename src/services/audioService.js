@@ -96,8 +96,13 @@ export async function processAudioMessage(userId, phone, audioUrl) {
     // 2. Transcrição do áudio para texto
     const transcription = await transcribeAudio(audioPath);
     
-    // 3. Informa o usuário que recebemos um áudio e estamos processando
-    logger.userMessage(phone, `[ÁUDIO]: ${transcription}`);
+    // 3. Adicione a mensagem transcrita ao log (apenas uma vez)
+    // Nota: O log de [ÁUDIO] já é feito no webhook
+    // O conteúdo específico da transcrição é registrado aqui
+    if (transcription) {
+      // Registramos apenas em debug para evitar poluição do log principal
+      logger.debug(`Transcrição do áudio: ${transcription}`);
+    }
     
     // 4. Processa o texto transcrito como uma mensagem normal
     await getChat(userId, phone, transcription);
