@@ -1,16 +1,15 @@
-# Sistema de Logs - Versão Simples
+# Sistema de Logs - Versão Simplificada
 
-Este documento descreve o sistema de logs simples do projeto.
+Este documento descreve o sistema de logs simplificado do projeto, sem dependências externas.
 
 ## Níveis de Log
 
-O sistema utiliza os níveis padrão do Winston:
+O sistema utiliza os seguintes níveis:
 
-- **error**: Para erros críticos
-- **warn**: Para avisos importantes
-- **info**: Para informações gerais (nível padrão)
-- **debug**: Para informações detalhadas
-- **silly**: Para rastreamento detalhado
+- **ERROR**: Para erros críticos
+- **WARN**: Para avisos importantes
+- **INFO**: Para informações gerais (nível padrão)
+- **DEBUG**: Para informações detalhadas (ativado via variável de ambiente)
 
 ## Formato dos Logs
 
@@ -26,7 +25,7 @@ Exemplo:
 
 ## Configuração
 
-O nível de log pode ser definido pela variável de ambiente:
+O nível de debug pode ser ativado pela variável de ambiente:
 ```
 LOG_LEVEL=debug
 ```
@@ -89,4 +88,11 @@ Os métodos console.* são redirecionados para o logger:
 - `console.error` → `logger.error`
 - `console.warn` → `logger.warn`
 - `console.info` → `logger.info`
-- `console.debug` → `logger.debug` 
+- `console.debug` → `logger.debug`
+
+## Vantagens desta Implementação
+
+1. **Zero dependências externas** - não depende de bibliotecas como Winston
+2. **Código leve e fácil de entender** - implementação direta
+3. **Desempenho aprimorado** - usa recursos nativos do Node.js
+4. **Formato consistente** - mantém o mesmo formato de logs visual 
