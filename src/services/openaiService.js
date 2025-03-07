@@ -4,6 +4,7 @@ import config from "../config.js";
 import redisClient from "../redisClient.js";
 import { get_products_info } from "../services/shopifyService.js";
 import { getOrderByNumber } from "../services/shopifyOrdersService.js";
+import logger from "../utils/logger.js";
 
 const openai = new OpenAI({
   apiKey: config.openai.apiKey
@@ -149,9 +150,70 @@ async function extractPhoneFromContext(threadId) {
 }
 
 export async function handleDeleteThread(userId) {
-  const threadId = await redisClient.get(`threadId:${userId}`);
-  if (threadId) {
-    await redisClient.del(`threadId:${userId}`);
-    console.log(`Thread ${threadId} removido do Redis`);
+  try {
+    // Log detalhado do início da operação
+    logger.system(`Iniciando exclusão de thread para userId: ${userId}`, { userId });
+    
+    // Obter threadId do Redis
+    const threadId = await redisClient.get(`threadId:${userId}`);
+    
+    // Log do threadId encontrado
+    logger.system(`Thread encontrado no Redis: ${threadId || 'nenhum'}`, { 
+      userId, 
+      threadId,
+      encontrado: !!threadId
+    });
+    
+    if (threadId) {
+      // Log antes de excluir
+      logger.debug(`Removendo thread ${threadId} do Redis`);
+      
+      // Excluir do Redis
+      await redisClient.del(`threadId:${userId}`);
+      
+      // Log após excluir
+      logger.info(`Thread ${threadId} removido do Redis`);
+      
+      // Log detalhado completo da operação
+      logger.system('Exclusão de thread concluída com sucesso', {
+        userId,
+        threadId,
+        timestamp: new Date().toISOString(),
+        operação: 'exclusão',
+        status: 'sucesso'
+      });
+      
+      return { success: true, threadId };
+    } else {
+      // Log caso não encontre thread
+      logger.warn(`Nenhum thread encontrado para userId: ${userId}`);
+      
+      logger.system('Exclusão de thread concluída sem ação', {
+        userId,
+        timestamp: new Date().toISOString(),
+        operação: 'exclusão',
+        status: 'sem threadId',
+        motivo: 'Não foi encontrado thread associado a este userId'
+      });
+      
+      return { success: false, error: 'Thread não encontrado' };
+    }
+  } catch (error) {
+    // Log detalhado em caso de erro
+    logger.error(`Erro ao excluir thread para userId: ${userId}`, { 
+      error: error.message,
+      stack: error.stack
+    });
+    
+    logger.system('Exclusão de thread falhou', {
+      userId,
+      timestamp: new Date().toISOString(),
+      operação: 'exclusão',
+      status: 'erro',
+      erro: error.message,
+      stack: error.stack
+    });
+    
+    return { success: false, error: error.message };
   }
 }

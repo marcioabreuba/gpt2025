@@ -101,8 +101,35 @@ export async function getChat(userId, phone, message, imageUrl, caption = '', is
             }
             
             if (formattedMessage.toLowerCase().includes('apagar thread_id')) {
-              await handleDeleteThread(userId);
+              // Log detalhado do comando recebido
+              logger.system(`Comando de exclusão de thread recebido de ${phone}`, {
+                userId,
+                phone,
+                command: 'apagar thread_id',
+                timestamp: new Date().toISOString()
+              });
+              
+              // Verifica se existe um threadId antes de excluir
+              const threadIdAtual = await redisClient.get(`threadId:${userId}`);
+              logger.debug(`Thread atual para ${userId}: ${threadIdAtual || 'nenhum'}`);
+              
+              // Executa a exclusão
+              const result = await handleDeleteThread(userId);
+              
+              // Log do resultado da operação
+              logger.system(`Resultado da exclusão de thread`, {
+                userId,
+                phone,
+                success: result.success,
+                threadId: result.threadId || 'N/A',
+                error: result.error || null
+              });
+              
+              // Responde ao usuário
+              logger.debug(`Enviando confirmação de exclusão para ${phone}`);
               await sendReplyZAPI(phone, "Histórico resetado com sucesso! 😊");
+              logger.info(`Confirmação de exclusão enviada para ${phone}`);
+              
               return;
             }
 

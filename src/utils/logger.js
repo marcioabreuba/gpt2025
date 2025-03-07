@@ -32,11 +32,15 @@ if (!fs.existsSync(LOG_DIR)) {
 const LOG_FILES = {
   APP: path.join(LOG_DIR, 'app.log'),
   ERROR: path.join(LOG_DIR, 'error.log'),
-  CHAT: path.join(LOG_DIR, 'chat.log')
+  CHAT: path.join(LOG_DIR, 'chat.log'),
+  DEBUG: path.join(LOG_DIR, 'debug.log'),   // Novo arquivo só para logs de debug
+  FULL: path.join(LOG_DIR, 'full.log')      // Novo arquivo que captura TUDO
 };
 
 // Configuração do nível de log
 const getLogLevel = () => {
+  // Forçamos TRACE para garantir que TUDO seja registrado no arquivo full.log
+  // Mas respeitamos a configuração do usuário para console e outros arquivos
   const level = (process.env.LOG_LEVEL || 'info').toUpperCase();
   return LEVELS[level] !== undefined ? LEVELS[level] : LEVELS.INFO;
 };
@@ -48,11 +52,6 @@ const timestamp = () => {
 
 // Escreve uma mensagem no arquivo de log e no console
 const writeLog = (level, message, meta = {}) => {
-  // Verifica se o nível de log está habilitado
-  if (LEVELS[level] > getLogLevel()) {
-    return;
-  }
-
   // Formata a mensagem
   let logMessage = `${timestamp()} [${level}] ${message}`;
   
@@ -65,17 +64,28 @@ const writeLog = (level, message, meta = {}) => {
   // Adiciona quebra de linha
   logMessage += '\n';
   
-  // Escreve no console com cores
-  const color = COLORS[level] || '';
-  process.stdout.write(`${color}${logMessage}${COLORS.RESET}`);
-  
   try {
-    // Escreve no arquivo de log principal
-    fs.appendFileSync(LOG_FILES.APP, logMessage);
+    // SEMPRE escreve no arquivo full.log, independente do nível
+    fs.appendFileSync(LOG_FILES.FULL, logMessage);
     
-    // Escreve no arquivo de erros se for um erro
-    if (level === 'ERROR') {
-      fs.appendFileSync(LOG_FILES.ERROR, logMessage);
+    // Para os outros arquivos, respeita o nível configurado
+    if (LEVELS[level] <= getLogLevel()) {
+      // Escreve no console com cores
+      const color = COLORS[level] || '';
+      process.stdout.write(`${color}${logMessage}${COLORS.RESET}`);
+      
+      // Escreve no arquivo de log principal
+      fs.appendFileSync(LOG_FILES.APP, logMessage);
+      
+      // Escreve no arquivo de erros se for um erro
+      if (level === 'ERROR') {
+        fs.appendFileSync(LOG_FILES.ERROR, logMessage);
+      }
+      
+      // Escreve no arquivo de debug se for debug ou trace
+      if (level === 'DEBUG' || level === 'TRACE') {
+        fs.appendFileSync(LOG_FILES.DEBUG, logMessage);
+      }
     }
   } catch (error) {
     console.error(`Erro ao escrever no log: ${error.message}`);
@@ -100,14 +110,53 @@ const logger = {
   userMessage: (phone, message) => {
     const chatMessage = `${timestamp()} 👤 ${phone} → Sofia: "${message}"\n`;
     fs.appendFileSync(LOG_FILES.CHAT, chatMessage);
+    fs.appendFileSync(LOG_FILES.FULL, chatMessage);
     logger.info(`Usuário ${phone}: "${message}"`);
   },
   
   iaMessage: (phone, message) => {
     const chatMessage = `${timestamp()} 🤖 Sofia → ${phone}: "${message}"\n`;
     fs.appendFileSync(LOG_FILES.CHAT, chatMessage);
+    fs.appendFileSync(LOG_FILES.FULL, chatMessage);
     logger.info(`Resposta para ${phone}`);
+  },
+  
+  // Função especial para registrar TUDO (não filtra pelo nível)
+  system: (message, data = {}) => {
+    const fullMessage = `${timestamp()} [SYSTEM] ${message}\n`;
+    fs.appendFileSync(LOG_FILES.FULL, fullMessage);
+    
+    // Se tiver dados, registra eles também
+    if (Object.keys(data).length > 0) {
+      const dataStr = JSON.stringify(data, null, 2);
+      fs.appendFileSync(LOG_FILES.FULL, `${dataStr}\n`);
+    }
+    
+    // Se o nível de log for DEBUG ou TRACE, mostra no console também
+    if (getLogLevel() >= LEVELS.DEBUG) {
+      console.log(`[SYSTEM] ${message}`, data);
+    }
   }
+};
+
+// Cria uma função para interceptar e registrar TODAS as chamadas de função
+const registerFunctionCall = (original, name) => {
+  return function(...args) {
+    // Registra no log FULL
+    const argsString = args.map(arg => 
+      typeof arg === 'object' ? JSON.stringify(arg) : String(arg)
+    ).join(', ');
+    
+    const fullMessage = `${timestamp()} [CALL] ${name}(${argsString})\n`;
+    try {
+      fs.appendFileSync(LOG_FILES.FULL, fullMessage);
+    } catch (error) {
+      // Não faz nada se falhar
+    }
+    
+    // Chama a função original
+    return original.apply(this, args);
+  };
 };
 
 // Sobrescreve os métodos do console
@@ -125,5 +174,8 @@ console.error = (...args) => logger.error(format(...args));
 console.warn = (...args) => logger.warn(format(...args));
 console.info = (...args) => logger.info(format(...args));
 console.debug = (...args) => logger.debug(format(...args));
+
+// Cria uma versão melhorada do logger para depuração
+console.system = (message, data = {}) => logger.system(message, data);
 
 export default logger;

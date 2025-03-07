@@ -24,19 +24,65 @@ const logger = winston.createLogger({
  */
 export async function sendReplyZAPI(phone, message) {
   try {
-    // Registra a mensagem nos logs
-    logger.info(`IA → ${phone}: ${message}`);
+    // Log detalhado do início da operação
+    logger.system(`Iniciando envio de mensagem para ${phone}`, {
+      phone,
+      messageLength: message.length,
+      timestamp: new Date().toISOString()
+    });
     
+    // Registra a mensagem nos logs de conversação
+    logger.iaMessage(phone, message);
+    
+    // Log para debug
+    logger.debug(`Preparando requisição Z-API para ${phone}: ${message.substring(0, 50)}${message.length > 50 ? '...' : ''}`);
+    
+    // Constrói a URL e o payload
     const url = `https://api.z-api.io/instances/${config.zapi.instanceId}/token/${config.zapi.token}/send-text`;
     const payload = { phone, message, delayTyping: 15 };
+    
+    // Faz a requisição
+    logger.debug(`Enviando requisição POST para Z-API: ${url}`);
     const response = await axios.post(url, payload, {
       headers: { "Client-Token": config.zapi.clientToken }
     });
-    console.log("Resposta enviada via Z-API:", response.data);
+    
+    // Log de sucesso com dados da resposta
+    logger.info(`Resposta enviada via Z-API:`, response.data);
+    
+    // Log detalhado do sucesso da operação
+    logger.system(`Mensagem enviada com sucesso para ${phone}`, {
+      phone,
+      messageId: response.data?.messageId || 'N/A',
+      zaapId: response.data?.zaapId || 'N/A',
+      status: 'sucesso',
+      timestamp: new Date().toISOString()
+    });
+    
+    return { success: true, data: response.data };
   } catch (error) {
+    // Extrai detalhes do erro
     const errMsg = error.response?.data || error.message;
-    console.error("Erro ao enviar mensagem via Z-API:", errMsg);
-    logger.error(`Falha ao enviar mensagem para ${phone}`, { error: errMsg });
+    const statusCode = error.response?.status || 'N/A';
+    
+    // Log de erro
+    logger.error(`Falha ao enviar mensagem para ${phone}`, { 
+      error: errMsg,
+      statusCode,
+      stack: error.stack
+    });
+    
+    // Log detalhado do erro
+    logger.system(`Falha no envio de mensagem para ${phone}`, {
+      phone,
+      error: errMsg,
+      statusCode,
+      stack: error.stack,
+      status: 'erro',
+      timestamp: new Date().toISOString()
+    });
+    
+    return { success: false, error: errMsg };
   }
 }
 
