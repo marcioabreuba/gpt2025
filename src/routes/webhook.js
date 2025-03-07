@@ -14,7 +14,7 @@ const router = express.Router();
 router.post("/webhook", async (req, res, next) => {
   try {
     // Loga o payload recebido do webhook
-    logger.info("Webhook recebido", { payload: req.body });
+    logger.debug("Webhook recebido", req.body);
     
     const { type, fromMe, chatLid, text, phone, audio, image } = req.body;
     
@@ -24,18 +24,28 @@ router.post("/webhook", async (req, res, next) => {
         const caption = image.caption || '';
         logger.info(`Recebido imagem do usuário ${phone} ${caption ? `com legenda: "${caption}"` : 'sem legenda'}`);
         
+        // Registrando a mensagem de imagem
+        if (caption) {
+          logger.userMessage(phone, `[IMAGEM] ${caption}`);
+        } else {
+          logger.userMessage(phone, "[IMAGEM sem legenda]");
+        }
+        
         // Processar imagem com legenda (se houver)
         await getChat(chatLid, phone, null, image.imageUrl, caption);
       }
       // Verificar se é uma mensagem de áudio
       else if (audio?.audioUrl) {
         logger.info(`Recebido áudio do usuário ${phone} (${audio.seconds}s)`);
+        logger.userMessage(phone, `[ÁUDIO ${audio.seconds}s]`);
+        
         await processAudioMessage(chatLid, phone, audio.audioUrl);
       }
       // Verificar se é uma mensagem de texto
       else if (text?.message) {
         const message = text.message || "";
-        logger.info(`Usuário ${phone} → Sofia: "${message}"`);
+        logger.userMessage(phone, message);
+        
         await getChat(chatLid, phone, message);
       }
     }

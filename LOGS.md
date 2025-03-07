@@ -55,11 +55,31 @@ logger.info('Servidor iniciado');
 logger.debug('Processando dados');
 ```
 
+### Logs de Conversação
+
+Para registrar mensagens da conversa com usuários:
+
+```javascript
+// Mensagem do usuário para a Sofia
+logger.userMessage('5511999998888', 'Quero saber sobre meu pedido');
+
+// Resposta da Sofia para o usuário
+logger.iaMessage('5511999998888', 'Vou buscar informações sobre seu pedido');
+```
+
+As conversas são salvas em um arquivo específico (`logs/conversation.log`) com formato simplificado:
+
+```
+2023-08-20 15:30:45 👤 5511999998888 → Sofia: "Quero saber sobre meu pedido"
+2023-08-20 15:30:47 🤖 Sofia → 5511999998888: "Vou buscar informações sobre seu pedido"
+```
+
 ## Arquivos de Log
 
 Os logs são salvos em:
 - `logs/application.log`: Todos os logs
 - `logs/error.log`: Apenas logs de erro
+- `logs/conversation.log`: Apenas trocas de mensagens entre usuários e o sistema
 
 ## Compatibilidade com console.log
 

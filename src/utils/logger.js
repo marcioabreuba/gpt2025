@@ -31,9 +31,44 @@ const logger = winston.createLogger({
     new winston.transports.File({ 
       filename: 'logs/error.log', 
       level: 'error' 
+    }),
+    // Arquivo específico para conversas
+    new winston.transports.File({
+      filename: 'logs/conversation.log',
+      format: winston.format.combine(
+        winston.format.timestamp({
+          format: 'YYYY-MM-DD HH:mm:ss'
+        }),
+        winston.format.printf(
+          ({ timestamp, level, message }) => {
+            if (level === 'convo') {
+              return `${timestamp} ${message}`;
+            }
+            return null;
+          }
+        )
+      )
     })
   ],
 });
+
+// Adiciona níveis personalizados para conversas
+logger.convo = (message) => {
+  logger.log('convo', message);
+};
+
+// Helpers para mensagens de conversação
+logger.userMessage = (phone, message) => {
+  const formattedMessage = `👤 ${phone} → Sofia: "${message}"`;
+  logger.convo(formattedMessage);
+  logger.info(formattedMessage);
+};
+
+logger.iaMessage = (phone, message) => {
+  const formattedMessage = `🤖 Sofia → ${phone}: "${message}"`;
+  logger.convo(formattedMessage);
+  logger.info(formattedMessage);
+};
 
 // Override dos console.* para usar o logger
 console.log = (message) => logger.info(message);

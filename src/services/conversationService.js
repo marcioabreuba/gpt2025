@@ -14,6 +14,7 @@ import {
 import { processImage } from './servidorImagem.js';
 import { sendReplyZAPI } from './zapiService.js';
 import OpenAI from 'openai';
+import logger from '../utils/logger.js';
 
 const openai = new OpenAI({ apiKey: config.openai.apiKey });
 const messageBuffers = new Map();
@@ -23,6 +24,9 @@ const TOKEN_LIMIT = 200000;
 
 export async function getChat(userId, phone, message, imageUrl, caption = '', isAudioTranscription = false) {
   try {
+    // Registrar a mensagem recebida
+    logger.userMessage(phone, message);
+
     if (!userId || (!message && !imageUrl)) {
       throw new Error('userId e message ou imageUrl são obrigatórios');
     }
@@ -157,7 +161,7 @@ export async function getChat(userId, phone, message, imageUrl, caption = '', is
         });
 
         // Registrar a resposta que será enviada
-        console.log(`Sofia responde para ${phone}: "${response}"`);
+        logger.iaMessage(phone, response);
 
         // Envia resposta via WhatsApp
         await sendReplyZAPI(phone, response);
