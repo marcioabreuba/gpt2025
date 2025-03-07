@@ -4,6 +4,7 @@ import config from '../config.js';
 import pineconeSearch from './BuscaPinecone.js';
 import embeddingText from './embeddingText.js';
 import Shopify from 'shopify-api-node';
+import logger from '../utils/logger.js';
 
 const shopify = new Shopify({
   shopName: config.shopify.shopDomain,
@@ -105,14 +106,14 @@ export async function getProductsByCollectionId(collectionId) {
   return productsWithInventory;
 }
 
-export const buscarProdutoPorId = async (productId) => {
+export async function buscarProdutoPorId(productId) {
   try {
     if (!productId) {
-      console.warn("ProductId não fornecido");
+      logger.warn("ProductId não fornecido");
       return null;
     }
 
-    console.log(`Buscando produto com ID: ${productId}`);
+    logger.debug(`Buscando produto com ID: ${productId}`);
     const productItem = await shopify.product.get(productId);
 
     return {
@@ -122,31 +123,31 @@ export const buscarProdutoPorId = async (productId) => {
       description: productItem.body_html,
     }
   } catch (error) {
-    console.error(`Erro ao buscar produto com ID ${productId}:`, error);
+    logger.error(`Erro ao buscar produto com ID ${productId}:`, { error: error.message, stack: error.stack });
     return null;
   }
 };
 
 export async function get_products_info(nomes_produtos) {
   try {
-    console.log("Nomes de produtos recebidos:", nomes_produtos);
+    logger.debug("Nomes de produtos recebidos:", { nomes_produtos });
 
     // Gerar embeddings
     const embeddings = await Promise.all(
       nomes_produtos.map((nome_produto) => embeddingText(nome_produto))
     );
-    console.log("Embeddings gerados:", embeddings);
+    logger.trace("Embeddings gerados"); // Removendo o log do conteúdo dos embeddings
 
     // Buscar itens no Pinecone
     const items = await Promise.all(
       embeddings.map((vectors) => pineconeSearch('text', vectors))
     );
-    console.log("Itens encontrados no Pinecone:", JSON.stringify(items, null, 2));
+    logger.trace("Itens encontrados no Pinecone", { count: items.flat().length });
 
     // Achatar o array de items e remover productIds duplicados
     const flattenedItems = [...new Set(items.flat().map(item => JSON.stringify(item)))]
       .map(item => JSON.parse(item));
-    console.log("Itens achatados sem duplicatas:", flattenedItems);
+    logger.debug("Itens únicos encontrados:", { count: flattenedItems.length });
 
     // Função para adicionar delay
     const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
@@ -163,7 +164,7 @@ export async function get_products_info(nomes_produtos) {
     // Executar as promises e filtrar produtos válidos
     const products = (await Promise.all(productsPromises)).filter(product => product !== null);
 
-    console.log("Produtos finais:", products);
+    logger.debug("Produtos finais:", products);
 
     // Converter produtos em uma string formatada
     const productsString = products.map(product => {
@@ -173,11 +174,11 @@ export async function get_products_info(nomes_produtos) {
       return `Título: ${product.title}. Preço: R$ ${product.price}. Descrição: ${cleanDescription}. Link do produto: ${product.public_url}.`;
     }).join(' ');
 
-    console.log("String de produtos:", productsString);
+    logger.debug("String de produtos:", productsString);
 
     return productsString;
   } catch (error) {
-    console.error("Erro detalhado ao recuperar informações de produtos:", error);
+    logger.error("Erro detalhado ao recuperar informações de produtos:", error);
     return {
       error: "Falha ao recuperar informações de produtos",
       detailedError: error.message
@@ -206,20 +207,20 @@ async function embeddingImage(imageUrl) {
 
 export async function get_products_info_by_image(imageUrl) {
   try {
-    console.log("ImageUrl", imageUrl);
+    logger.debug("ImageUrl", imageUrl);
 
     // Gerar embeddings
     const vectorsImage = await embeddingImage(imageUrl); // importar
-    console.log("Embeddings gerados:", vectorsImage);
+    logger.trace("Embeddings gerados:", vectorsImage);
 
     // Buscar itens no Pinecone
     const itemsSearch = await pineconeSearch('image', vectorsImage);
-    console.log("Itens encontrados no Pinecone:", JSON.stringify(itemsSearch, null, 2));
+    logger.trace("Itens encontrados no Pinecone:", JSON.stringify(itemsSearch, null, 2));
 
     // Achatar o array de items e remover productIds duplicados
     const flattenedItems = [...new Set(itemsSearch.flat().map(item => JSON.stringify(item)))]
       .map(item => JSON.parse(item));
-    console.log("Itens achatados sem duplicatas:", flattenedItems);
+    logger.debug("Itens achatados sem duplicatas:", flattenedItems);
 
     // Função para adicionar delay
     const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
@@ -236,7 +237,7 @@ export async function get_products_info_by_image(imageUrl) {
     // Executar as promises e filtrar produtos válidos
     const products = (await Promise.all(productsPromises)).filter(product => product !== null);
 
-    console.log("Produtos finais:", products);
+    logger.debug("Produtos finais:", products);
 
     // Converter produtos em uma string formatada
     const productsString = products.map(product => {
@@ -246,11 +247,11 @@ export async function get_products_info_by_image(imageUrl) {
       return `Título: ${product.title}. Preço: R$ ${product.price}. Descrição: ${cleanDescription}. Link do produto: ${product.public_url}.`;
     }).join(' ');
 
-    console.log("String de produtos:", productsString);
+    logger.debug("String de produtos:", productsString);
 
     return productsString;
   } catch (error) {
-    console.error("Erro detalhado ao recuperar informações de produtos:", error);
+    logger.error("Erro detalhado ao recuperar informações de produtos:", error);
     return {
       error: "Falha ao recuperar informações de produtos",
       detailedError: error.message

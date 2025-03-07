@@ -55,5 +55,11 @@ export default {
   serverLink: process.env.SERVER_LINK,
 
   // Fuso horário padrão
-  timezone: "America/Sao_Paulo"
+  timezone: "America/Sao_Paulo",
+  
+  // Configuração de logging
+  loggerLevel: process.env.LOG_LEVEL || 'info',
+  
+  // Modo de ambiente
+  nodeEnv: process.env.NODE_ENV || 'production'
 };

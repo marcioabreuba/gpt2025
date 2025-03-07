@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import './utils/logger.js'; // Garante que o logger é carregado primeiro
 import express from 'express';
 import bodyParser from 'body-parser';
 import cors from 'cors';
