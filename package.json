@@ -5,7 +5,9 @@
   "type": "module",
   "main": "src/index.js",
   "scripts": {
-    "start": "node src/index.js"
+    "start": "node start.js",
+    "start:old": "node src/index.js",
+    "start:no-warnings": "node --no-warnings src/index.js"
   },
   "dependencies": {
     "@pinecone-database/pinecone": "^5.1.0",

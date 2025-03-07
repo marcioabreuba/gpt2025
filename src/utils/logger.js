@@ -20,8 +20,25 @@ function timestamp() {
   return now.toISOString().replace('T', ' ').substr(0, 19);
 }
 
+// Lista de avisos a serem ignorados
+const ignoredWarnings = [
+  '[DEP0040] DeprecationWarning: The `punycode` module is deprecated',
+  'DeprecationWarning:',
+  '[DEP'
+];
+
+// Função para verificar se uma mensagem deve ser ignorada
+function shouldIgnoreMessage(message) {
+  return ignoredWarnings.some(warning => message.includes(warning));
+}
+
 // Função auxiliar para escrever logs
 function writeLog(stream, level, message) {
+  // Ignora avisos de depreciação e outros avisos internos do Node
+  if (shouldIgnoreMessage(message)) {
+    return;
+  }
+
   const time = timestamp();
   const formattedMessage = `${time} [${level.toUpperCase()}] ${message}\n`;
   
@@ -36,6 +53,10 @@ function writeLog(stream, level, message) {
 const logger = {
   error: (...args) => {
     const message = format(...args);
+    // Não registra avisos de depreciação como erros
+    if (shouldIgnoreMessage(message)) {
+      return;
+    }
     writeLog(appLogStream, 'ERROR', message);
     writeLog(errorLogStream, 'ERROR', message);
   },
@@ -72,8 +93,21 @@ const logger = {
 };
 
 // Override dos console.* para usar o logger
+const originalConsoleError = console.error;
+
 console.log = (...args) => logger.info(...args);
-console.error = (...args) => logger.error(...args);
+console.error = (...args) => {
+  const message = format(...args);
+  // Filtra avisos de depreciação
+  if (shouldIgnoreMessage(message)) {
+    if (process.env.NODE_ENV === 'development') {
+      // Em desenvolvimento, ainda mostra no console original
+      originalConsoleError(...args);
+    }
+    return;
+  }
+  logger.error(...args);
+};
 console.warn = (...args) => logger.warn(...args);
 console.info = (...args) => logger.info(...args);
 console.debug = (...args) => logger.debug(...args);
