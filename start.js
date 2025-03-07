@@ -1,7 +1,8 @@
-// Script para iniciar a aplicação ignorando avisos de depreciação
+// Script para iniciar a aplicação 
 import { spawn } from 'child_process';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import fs from 'fs';
 
 // Obtém o diretório atual
 const __filename = fileURLToPath(import.meta.url);
@@ -10,15 +11,30 @@ const __dirname = path.dirname(__filename);
 // Configuração para ignorar avisos de depreciação
 process.env.NODE_NO_WARNINGS = '1';
 
-// Configura o nível de log para trace se não estiver definido
-if (!process.env.LOG_LEVEL) {
-  process.env.LOG_LEVEL = 'trace';
-  console.log('🔧 LOG_LEVEL não definido, usando "trace" como padrão');
+// Banner de inicialização
+console.log(`
+┌─────────────────────────────────────────────┐
+│                                             │
+│             INICIANDO APLICAÇÃO             │
+│                                             │
+└─────────────────────────────────────────────┘
+`);
+
+// Configurações
+console.log('🔧 Configurações:');
+console.log(`• NODE_ENV: ${process.env.NODE_ENV || 'não definido'}`);
+console.log(`• LOG_LEVEL: ${process.env.LOG_LEVEL || 'info (padrão)'}`);
+console.log(`• PORT: ${process.env.PORT || '3000 (padrão)'}`);
+
+// Cria diretório de logs se não existir
+const logDir = path.join(__dirname, 'logs');
+if (!fs.existsSync(logDir)) {
+  fs.mkdirSync(logDir);
+  console.log(`📁 Diretório de logs criado: ${logDir}`);
 }
 
 // Inicia a aplicação
-console.log('🚀 Iniciando a aplicação...');
-console.log(`📝 Nível de log: ${process.env.LOG_LEVEL}`);
+console.log('\n🚀 Iniciando servidor...');
 
 const app = spawn('node', ['src/index.js'], {
   stdio: 'inherit',
@@ -30,16 +46,20 @@ const app = spawn('node', ['src/index.js'], {
 
 // Tratamento de eventos do processo
 app.on('close', (code) => {
-  console.log(`Aplicação encerrada com código: ${code}`);
+  if (code === 0) {
+    console.log('\n✅ Aplicação encerrada normalmente.');
+  } else {
+    console.error(`\n❌ Aplicação encerrada com código: ${code}`);
+  }
 });
 
 // Encaminha sinais do sistema operacional para a aplicação
 process.on('SIGINT', () => {
-  console.log('Encerrando aplicação...');
+  console.log('\n🛑 Encerrando aplicação...');
   app.kill('SIGINT');
 });
 
 process.on('SIGTERM', () => {
-  console.log('Encerrando aplicação...');
+  console.log('\n🛑 Encerrando aplicação...');
   app.kill('SIGTERM');
 }); 

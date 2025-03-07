@@ -1,73 +1,79 @@
-# Sistema de Logs - Versão Simplificada
+# Sistema de Logs - Versão Robusta
 
-Este documento descreve o sistema de logs simplificado do projeto, sem dependências externas.
+Este documento descreve o sistema de logs do projeto, com foco em simplicidade e robustez.
 
 ## Níveis de Log
 
-O sistema utiliza os seguintes níveis:
+O sistema utiliza os seguintes níveis, em ordem de prioridade:
 
 - **ERROR**: Para erros críticos
 - **WARN**: Para avisos importantes
 - **INFO**: Para informações gerais (nível padrão)
-- **DEBUG**: Para informações detalhadas (ativado via variável de ambiente)
-- **TRACE**: Para informações extremamente detalhadas (ativado via variável de ambiente)
+- **DEBUG**: Para informações detalhadas
+- **TRACE**: Para informações extremamente detalhadas
 
 ## Formato dos Logs
 
 Cada log contém:
-- Data e hora (YYYY-MM-DD HH:mm:ss)
+- Data e hora completa (YYYY-MM-DD HH:mm:ss.SSS)
 - Nível do log em maiúsculas
-- Mensagem
+- Mensagem principal
+- Metadados estruturados (quando fornecidos)
 
 Exemplo:
 ```
-2023-08-20 15:30:45 [INFO] Servidor iniciado na porta 3000
+2023-08-20 15:30:45.123 [INFO] Servidor iniciado na porta 3000
 ```
+
+Exemplo com metadados:
+```
+2023-08-20 15:30:45.123 [INFO] Consulta realizada
+{
+  "duracao": 325,
+  "tipo": "shopify",
+  "resultado": "sucesso"
+}
+```
+
+## Arquivos de Log
+
+Os logs são salvos em arquivos específicos:
+- `logs/app.log`: Todos os logs da aplicação
+- `logs/error.log`: Apenas logs de erro (para facilitar a detecção de problemas)
+- `logs/chat.log`: Conversas entre usuários e o sistema
 
 ## Configuração
 
-Os níveis de log podem ser ativados pela variável de ambiente:
+O nível de log pode ser configurado através da variável de ambiente `LOG_LEVEL`:
+
 ```
-# Mostra INFO, WARN e ERROR (padrão)
-LOG_LEVEL=info
-
-# Mostra também DEBUG
-LOG_LEVEL=debug
-
-# Mostra também TRACE (mais detalhado)
-LOG_LEVEL=trace
+# No arquivo .env
+LOG_LEVEL=info  # Valores: error, warn, info, debug, trace
 ```
 
 ## Como usar o Logger
 
-### Importação
-
-```javascript
-import logger from '../utils/logger.js';
-```
-
 ### Uso Básico
 
 ```javascript
-// Mensagens de erro
-logger.error('Erro ao conectar');
+import logger from '../utils/logger.js';
 
-// Avisos
-logger.warn('Token expirando');
+// Logs simples
+logger.error('Erro ao conectar ao banco de dados');
+logger.warn('Token expirando em 24 horas');
+logger.info('Servidor iniciado na porta 3000');
+logger.debug('Processando payload recebido');
+logger.trace('Dados completos da requisição', { headers, body });
 
-// Informações gerais
-logger.info('Servidor iniciado');
-
-// Informações de depuração
-logger.debug('Processando dados');
-
-// Informações de rastreamento muito detalhadas
-logger.trace('Valores completos', objetoDetalhado);
+// Logs com metadados estruturados
+logger.info('Operação concluída', { 
+  duracao: 125, 
+  status: 'sucesso',
+  itens: 50
+});
 ```
 
 ### Logs de Conversação
-
-Para registrar mensagens da conversa com usuários:
 
 ```javascript
 // Mensagem do usuário para a Sofia
@@ -77,47 +83,23 @@ logger.userMessage('5511999998888', 'Quero saber sobre meu pedido');
 logger.iaMessage('5511999998888', 'Vou buscar informações sobre seu pedido');
 ```
 
-As conversas são salvas em um arquivo específico (`logs/conversation.log`) com formato simplificado:
-
-```
-2023-08-20 15:30:45 👤 5511999998888 → Sofia: "Quero saber sobre meu pedido"
-2023-08-20 15:30:47 🤖 Sofia → 5511999998888: "Vou buscar informações sobre seu pedido"
-```
-
-## Arquivos de Log
-
-Os logs são salvos em:
-- `logs/application.log`: Todos os logs
-- `logs/error.log`: Apenas logs de erro
-- `logs/conversation.log`: Apenas trocas de mensagens entre usuários e o sistema
-
 ## Compatibilidade com console.log
 
-Os métodos console.* são redirecionados para o logger:
+Todos os métodos do console são redirecionados para o logger:
 
-- `console.log` → `logger.info`
-- `console.error` → `logger.error`
-- `console.warn` → `logger.warn`
-- `console.info` → `logger.info`
-- `console.debug` → `logger.debug`
+```javascript
+console.log('Isso vai para logger.info');
+console.error('Isso vai para logger.error');
+console.warn('Isso vai para logger.warn');
+console.info('Isso vai para logger.info');
+console.debug('Isso vai para logger.debug');
+```
 
-## Filtro de Avisos de Depreciação
+## Vantagens deste Sistema
 
-O sistema filtra automaticamente avisos de depreciação do Node.js, como:
-- Avisos sobre o módulo `punycode`
-- Outros avisos de depreciação com prefixo `[DEP`
-
-## Prevenção de Log Duplicado
-
-As mensagens de conversação são registradas apenas:
-- No arquivo específico de conversas
-- No console com ícones distintos (📱 e 🔄)
-- Não são duplicadas no log de aplicação geral
-
-## Vantagens desta Implementação
-
-1. **Zero dependências externas** - não depende de bibliotecas como Winston
-2. **Código leve e fácil de entender** - implementação direta
-3. **Desempenho aprimorado** - usa recursos nativos do Node.js
-4. **Formato consistente** - mantém o mesmo formato de logs visual
-5. **Evita duplicação** - cada mensagem é registrada apenas uma vez 
+1. **Simplicidade**: Código direto e fácil de entender
+2. **Performance**: Usa operações síncronas de baixo overhead
+3. **Robustez**: Tratamento de erros em todas as operações
+4. **Flexibilidade**: Suporte a metadados estruturados
+5. **Visibilidade**: Logs coloridos no console e organizados por arquivo
+6. **Facilidade de depuração**: Separação dos erros em arquivo próprio 

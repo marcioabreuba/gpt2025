@@ -3,36 +3,114 @@ import fs from 'fs';
 import path from 'path';
 import { format } from 'util';
 
-// Garante que o diretório de logs existe
-const logDir = 'logs';
-if (!fs.existsSync(logDir)) {
-  fs.mkdirSync(logDir);
+// Níveis de log disponíveis
+const LEVELS = {
+  ERROR: 0,
+  WARN: 1,
+  INFO: 2,
+  DEBUG: 3,
+  TRACE: 4
+};
+
+// Cores para os diferentes níveis (quando exibidos no console)
+const COLORS = {
+  ERROR: '\x1b[31m', // Vermelho
+  WARN: '\x1b[33m',  // Amarelo
+  INFO: '\x1b[36m',  // Ciano
+  DEBUG: '\x1b[32m', // Verde
+  TRACE: '\x1b[35m', // Magenta
+  RESET: '\x1b[0m'   // Reset
+};
+
+// Cria o diretório de logs se não existir
+const LOG_DIR = path.join(process.cwd(), 'logs');
+if (!fs.existsSync(LOG_DIR)) {
+  fs.mkdirSync(LOG_DIR);
 }
 
-// Tratamento de erro para os streams
-function createSafeWriteStream(filePath) {
-  try {
-    return fs.createWriteStream(filePath, { flags: 'a' });
-  } catch (error) {
-    console.error(`Erro ao criar stream para ${filePath}:`, error);
-    // Fallback para um stream que não faz nada
-    return { 
-      write: () => {}, 
-      end: () => {},
-      on: () => {}
-    };
+// Arquivos de log
+const LOG_FILES = {
+  APP: path.join(LOG_DIR, 'app.log'),
+  ERROR: path.join(LOG_DIR, 'error.log'),
+  CHAT: path.join(LOG_DIR, 'chat.log')
+};
+
+// Configuração do nível de log
+const getLogLevel = () => {
+  const level = (process.env.LOG_LEVEL || 'info').toUpperCase();
+  return LEVELS[level] !== undefined ? LEVELS[level] : LEVELS.INFO;
+};
+
+// Obtém o timestamp atual formatado
+const timestamp = () => {
+  return new Date().toISOString().replace('T', ' ').substring(0, 23);
+};
+
+// Escreve uma mensagem no arquivo de log e no console
+const writeLog = (level, message, meta = {}) => {
+  // Verifica se o nível de log está habilitado
+  if (LEVELS[level] > getLogLevel()) {
+    return;
   }
-}
 
-// Streams de arquivos para logs
-const appLogStream = createSafeWriteStream(path.join(logDir, 'application.log'));
-const errorLogStream = createSafeWriteStream(path.join(logDir, 'error.log'));
-const convoLogStream = createSafeWriteStream(path.join(logDir, 'conversation.log'));
+  // Formata a mensagem
+  let logMessage = `${timestamp()} [${level}] ${message}`;
+  
+  // Adiciona metadados se existirem
+  if (Object.keys(meta).length > 0) {
+    const metaStr = JSON.stringify(meta, null, 2);
+    logMessage += `\n${metaStr}`;
+  }
+  
+  // Adiciona quebra de linha
+  logMessage += '\n';
+  
+  // Escreve no console com cores
+  const color = COLORS[level] || '';
+  process.stdout.write(`${color}${logMessage}${COLORS.RESET}`);
+  
+  try {
+    // Escreve no arquivo de log principal
+    fs.appendFileSync(LOG_FILES.APP, logMessage);
+    
+    // Escreve no arquivo de erros se for um erro
+    if (level === 'ERROR') {
+      fs.appendFileSync(LOG_FILES.ERROR, logMessage);
+    }
+  } catch (error) {
+    console.error(`Erro ao escrever no log: ${error.message}`);
+  }
+};
 
-// Flag para controlar a saída para o console
-const PRINT_TO_CONSOLE = true;
+// API do logger
+const logger = {
+  error: (message, meta) => writeLog('ERROR', message, meta),
+  warn: (message, meta) => writeLog('WARN', message, meta),
+  info: (message, meta) => writeLog('INFO', message, meta),
+  debug: (message, meta) => writeLog('DEBUG', message, meta),
+  trace: (message, meta) => writeLog('TRACE', message, meta),
+  
+  // Formata argumentos múltiplos como o console.log
+  log: (level, ...args) => {
+    const message = format(...args);
+    writeLog(level.toUpperCase(), message);
+  },
+  
+  // Logs de chat
+  userMessage: (phone, message) => {
+    const chatMessage = `${timestamp()} 👤 ${phone} → Sofia: "${message}"\n`;
+    fs.appendFileSync(LOG_FILES.CHAT, chatMessage);
+    logger.info(`Usuário ${phone}: "${message}"`);
+  },
+  
+  iaMessage: (phone, message) => {
+    const chatMessage = `${timestamp()} 🤖 Sofia → ${phone}: "${message}"\n`;
+    fs.appendFileSync(LOG_FILES.CHAT, chatMessage);
+    logger.info(`Resposta para ${phone}`);
+  }
+};
 
-// Salva as funções originais do console antes de sobrescrevê-las
+// Sobrescreve os métodos do console
 const originalConsole = {
   log: console.log,
   error: console.error,
@@ -41,203 +119,11 @@ const originalConsole = {
   debug: console.debug
 };
 
-// Flag para evitar loops infinitos de logging
-let isLogging = false;
-
-// Cache de mensagens recentes para evitar duplicação
-const recentMessages = new Set();
-const MESSAGE_CACHE_SIZE = 100;
-const MESSAGE_CACHE_TTL = 2000; // 2 segundos
-
-// Função para adicionar à cache com tempo de expiração
-function addToRecentMessages(message) {
-  // Limpa cache se ficar muito grande
-  if (recentMessages.size > MESSAGE_CACHE_SIZE) {
-    recentMessages.clear();
-  }
-  
-  // Adiciona mensagem com expiração
-  recentMessages.add(message);
-  setTimeout(() => {
-    recentMessages.delete(message);
-  }, MESSAGE_CACHE_TTL);
-  
-  // Retorna true se a mensagem já existia
-  return recentMessages.has(message);
-}
-
-// Função auxiliar para formatar a data/hora atual
-function timestamp() {
-  const now = new Date();
-  return now.toISOString().replace('T', ' ').substr(0, 19);
-}
-
-// Lista de avisos a serem ignorados
-const ignoredWarnings = [
-  '[DEP0040] DeprecationWarning: The `punycode` module is deprecated',
-  'DeprecationWarning:',
-  '[DEP'
-];
-
-// Função para verificar se uma mensagem deve ser ignorada
-function shouldIgnoreMessage(message) {
-  return ignoredWarnings.some(warning => message.includes(warning));
-}
-
-// Função auxiliar para escrever logs
-function writeLog(stream, level, message) {
-  // Previne loops infinitos
-  if (isLogging) return;
-  isLogging = true;
-  
-  try {
-    // Ignora avisos de depreciação e outros avisos internos do Node
-    if (shouldIgnoreMessage(message)) {
-      isLogging = false;
-      return;
-    }
-  
-    // Verifica se a mensagem é recente duplicada
-    const messageKey = `${level}:${message}`;
-    if (addToRecentMessages(messageKey)) {
-      isLogging = false;
-      return;
-    }
-  
-    const time = timestamp();
-    const formattedMessage = `${time} [${level.toUpperCase()}] ${message}\n`;
-    
-    // Escreve no console usando a função original
-    if (PRINT_TO_CONSOLE) {
-      process.stdout.write(formattedMessage);
-    }
-    
-    // Escreve no arquivo
-    try {
-      stream.write(formattedMessage);
-    } catch (error) {
-      originalConsole.error(`Erro ao escrever no log:`, error);
-    }
-  } finally {
-    isLogging = false;
-  }
-}
-
-// Mapeamento de níveis para decidir quando exibir logs
-const shouldShowLevel = {
-  error: () => true,
-  warn: () => true,
-  info: () => true,
-  debug: () => process.env.LOG_LEVEL === 'debug' || process.env.LOG_LEVEL === 'trace',
-  trace: () => process.env.LOG_LEVEL === 'trace',
-  convo: () => true
-};
-
-// Logger simples
-const logger = {
-  // Método genérico para compatibilidade com chamadas diretas
-  log: (level, ...args) => {
-    const levelLower = String(level).toLowerCase();
-    if (shouldShowLevel[levelLower]?.()) {
-      const message = format(...args);
-      if (levelLower === 'error') {
-        writeLog(appLogStream, levelLower, message);
-        writeLog(errorLogStream, levelLower, message);
-      } else {
-        writeLog(appLogStream, levelLower, message);
-      }
-    }
-  },
-
-  error: (...args) => {
-    const message = format(...args);
-    // Não registra avisos de depreciação como erros
-    if (shouldIgnoreMessage(message)) {
-      return;
-    }
-    writeLog(appLogStream, 'ERROR', message);
-    writeLog(errorLogStream, 'ERROR', message);
-  },
-  
-  warn: (...args) => {
-    const message = format(...args);
-    writeLog(appLogStream, 'WARN', message);
-  },
-  
-  info: (...args) => {
-    const message = format(...args);
-    writeLog(appLogStream, 'INFO', message);
-  },
-  
-  debug: (...args) => {
-    if (shouldShowLevel.debug()) {
-      const message = format(...args);
-      writeLog(appLogStream, 'DEBUG', message);
-    }
-  },
-  
-  // Adicionando a função trace que estava faltando
-  trace: (...args) => {
-    if (shouldShowLevel.trace()) {
-      const message = format(...args);
-      writeLog(appLogStream, 'TRACE', message);
-    }
-  },
-  
-  // Funções para mensagens de conversação
-  userMessage: (phone, message) => {
-    const formattedMessage = `👤 ${phone} → Sofia: "${message}"`;
-    
-    // Adicionar à cache para evitar duplicação
-    const messageKey = `USER:${phone}:${message}`;
-    if (addToRecentMessages(messageKey)) {
-      return;
-    }
-    
-    // Escrever no arquivo de conversas
-    convoLogStream.write(`${timestamp()} ${formattedMessage}\n`);
-    
-    // Escrever no console usando a função original
-    if (PRINT_TO_CONSOLE) {
-      process.stdout.write(`${timestamp()} [INFO] 📱 ${formattedMessage}\n`);
-    }
-  },
-  
-  iaMessage: (phone, message) => {
-    const formattedMessage = `🤖 Sofia → ${phone}: "${message}"`;
-    
-    // Adicionar à cache para evitar duplicação
-    const messageKey = `IA:${phone}:${message.substring(0, 50)}`;
-    if (addToRecentMessages(messageKey)) {
-      return;
-    }
-    
-    // Escrever no arquivo de conversas
-    convoLogStream.write(`${timestamp()} ${formattedMessage}\n`);
-    
-    // Escrever no console usando a função original
-    if (PRINT_TO_CONSOLE) {
-      process.stdout.write(`${timestamp()} [INFO] 🔄 ${formattedMessage}\n`);
-    }
-  }
-};
-
-// Override dos console.* para usar o logger
-console.log = (...args) => logger.info(...args);
-console.error = (...args) => {
-  const message = format(...args);
-  // Filtra avisos de depreciação
-  if (shouldIgnoreMessage(message)) {
-    if (process.env.NODE_ENV === 'development') {
-      // Em desenvolvimento, ainda mostra no console original
-      originalConsole.error(...args);
-    }
-    return;
-  }
-  logger.error(...args);
-};
-console.warn = (...args) => logger.warn(...args);
-console.info = (...args) => logger.info(...args);
-console.debug = (...args) => logger.debug(...args);
+// Substitui os métodos do console
+console.log = (...args) => logger.info(format(...args));
+console.error = (...args) => logger.error(format(...args));
+console.warn = (...args) => logger.warn(format(...args));
+console.info = (...args) => logger.info(format(...args));
+console.debug = (...args) => logger.debug(format(...args));
 
 export default logger;
