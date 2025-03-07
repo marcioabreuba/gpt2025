@@ -6,11 +6,27 @@ Este documento descreve o sistema de logs aprimorado do projeto, que foi desenvo
 
 O sistema utiliza os seguintes níveis de log, em ordem de gravidade:
 
-1. **error**: Para erros críticos que afetam o funcionamento da aplicação.
-2. **warn**: Para avisos importantes que não interrompem o funcionamento, mas merecem atenção.
-3. **info**: Para informações gerais sobre o estado e fluxo da aplicação.
-4. **debug**: Para informações detalhadas úteis durante a depuração.
-5. **trace**: Para informações extremamente detalhadas e dados de rastreamento.
+1. **error** `[!]`: Para erros críticos que afetam o funcionamento da aplicação.
+2. **warn** `[*]`: Para avisos importantes que não interrompem o funcionamento, mas merecem atenção.
+3. **info** `[→]`: Para informações gerais sobre o estado e fluxo da aplicação.
+4. **debug** `[#]`: Para informações detalhadas úteis durante a depuração.
+5. **trace** `[+]`: Para informações extremamente detalhadas e dados de rastreamento.
+6. **success** `[✓]`: Para confirmação de operações concluídas com sucesso.
+
+## Formato Visual
+
+Cada log contém:
+- Timestamp em formato legível (YYYY-MM-DD HH:mm:ss)
+- Número sequencial do log (para fácil referência)
+- Símbolo indicando o nível do log 
+- Nível do log em letras maiúsculas
+- Mensagem principal
+- Metadados adicionais (quando existentes)
+
+Exemplo:
+```
+2023-08-20 15:30:45 [0001] [→] [INFO]: Servidor iniciado na porta 3000
+```
 
 ## Configuração
 
@@ -35,20 +51,41 @@ import logger from '../utils/logger.js';
 ### Uso Básico
 
 ```javascript
-// Mensagens de erro (vermelho)
+// Mensagens de erro (fundo vermelho)
 logger.error('Erro crítico ao processar pagamento');
 
-// Avisos (amarelo)
+// Avisos (fundo amarelo)
 logger.warn('Token de acesso expirando em 1 hora');
 
-// Informações normais (ciano)
+// Informações normais (fundo azul)
 logger.info('Servidor iniciado na porta 3000');
 
 // Informações de depuração (verde)
 logger.debug('Processando payload:', { id: 123, status: 'pending' });
 
-// Rastreamento detalhado (magenta)
+// Rastreamento detalhado (lilás)
 logger.trace('Detalhes completos da requisição:', request);
+
+// Mensagens de sucesso (fundo verde)
+logger.success('Operação concluída com sucesso');
+```
+
+### Mensagens em Destaque
+
+Para mensagens que precisam de maior visibilidade:
+
+```javascript
+// Destaque padrão (fundo azul)
+logger.destaque('INICIANDO PROCESSO DE SINCRONIZAÇÃO');
+
+// Destaque de erro (fundo vermelho)
+logger.destaqueErro('FALHA CRÍTICA NA CONEXÃO');
+
+// Destaque de sucesso (fundo verde)
+logger.destaqueSucesso('SINCRONIZAÇÃO COMPLETA');
+
+// Destaque de aviso (fundo amarelo)
+logger.destaqueAviso('PERFORMANCE DEGRADADA');
 ```
 
 ### Mensagens Estruturadas
@@ -79,7 +116,7 @@ logger.iaMessage('5511999998888', 'Vou buscar informações sobre seu pedido');
 
 O sistema sobrescreve os métodos nativos do `console` para usar o logger:
 
-- `console.log` → `logger.info`
+- `console.log` → `logger.info` ou `logger.success` (detecta automaticamente)
 - `console.error` → `logger.error`
 - `console.warn` → `logger.warn`
 - `console.info` → `logger.info`

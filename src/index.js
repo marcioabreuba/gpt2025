@@ -8,6 +8,7 @@ import limiter from './middlewares/rateLimiter.js';
 import { checkMessageSize } from './middlewares/messageSize.js';
 import { errorHandler } from './middlewares/errorHandler.js';
 import pkg from '@prisma/client';
+import logger from './utils/logger.js';
 const { PrismaClient } = pkg;
 
 // Importa o cronjob (ele roda automaticamente)
@@ -30,8 +31,9 @@ const prisma = new PrismaClient();
 const startDb = async () => {
   try {
     await prisma.$connect();
+    logger.success('Conexão com o banco de dados estabelecida');
   } catch (error) {
-    console.error('❌ Erro ao conectar ao banco:', error);
+    logger.error('Erro ao conectar ao banco:', { error: error.message, stack: error.stack });
     process.exit(1);
   }
 };
@@ -45,6 +47,8 @@ app.use(checkMessageSize);
 
 // Inicialização segura do servidor
 async function startServer() {
+  logger.destaque('INICIANDO SERVIDOR');
+  
   await startDb();
 
   // Registra as rotas corretamente
@@ -61,12 +65,13 @@ async function startServer() {
 
   // Inicia o servidor
   app.listen(config.port, () => {
-    console.log(`🚀 Servidor rodando na porta ${config.port}`);
+    logger.destaqueSucesso(`SERVIDOR PRONTO NA PORTA ${config.port}`);
   });
 }
 
 // Inicia a aplicação de forma segura
 startServer().catch(error => {
-  console.error('❌ Falha na inicialização:', error);
+  logger.destaqueErro('FALHA NA INICIALIZAÇÃO');
+  logger.error('Detalhes do erro:', { error: error.message, stack: error.stack });
   process.exit(1);
 });
