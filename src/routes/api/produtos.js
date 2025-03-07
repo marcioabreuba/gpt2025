@@ -2,7 +2,8 @@ import express from 'express';
 import httpStatus from 'http-status';
 import { buscarTodosProdutos } from '../../services/buscar_produtos.js';
 import { tratamentoProdutos } from '../../services/tratamentoProdutos.js';  
-import { PrismaClient } from '@prisma/client';
+import pkg from '@prisma/client';
+const { PrismaClient } = pkg;
 
 const prisma = new PrismaClient();
 const router = express.Router();

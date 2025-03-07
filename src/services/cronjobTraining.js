@@ -1,5 +1,6 @@
 import cron from 'node-cron';
-import { PrismaClient } from '@prisma/client';
+import pkg from '@prisma/client';
+const { PrismaClient } = pkg;
 import axios from 'axios';
 import { Pinecone } from '@pinecone-database/pinecone';
 

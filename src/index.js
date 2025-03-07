@@ -6,7 +6,8 @@ import config from './config.js';
 import limiter from './middlewares/rateLimiter.js';
 import { checkMessageSize } from './middlewares/messageSize.js';
 import { errorHandler } from './middlewares/errorHandler.js';
-import { PrismaClient } from '@prisma/client';
+import pkg from '@prisma/client';
+const { PrismaClient } = pkg;
 
 // Importa o cronjob (ele roda automaticamente)
 import './services/cronjobTraining.js'
