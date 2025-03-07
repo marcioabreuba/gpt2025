@@ -10,6 +10,7 @@ O sistema utiliza os seguintes níveis:
 - **WARN**: Para avisos importantes
 - **INFO**: Para informações gerais (nível padrão)
 - **DEBUG**: Para informações detalhadas (ativado via variável de ambiente)
+- **TRACE**: Para informações extremamente detalhadas (ativado via variável de ambiente)
 
 ## Formato dos Logs
 
@@ -25,9 +26,16 @@ Exemplo:
 
 ## Configuração
 
-O nível de debug pode ser ativado pela variável de ambiente:
+Os níveis de log podem ser ativados pela variável de ambiente:
 ```
+# Mostra INFO, WARN e ERROR (padrão)
+LOG_LEVEL=info
+
+# Mostra também DEBUG
 LOG_LEVEL=debug
+
+# Mostra também TRACE (mais detalhado)
+LOG_LEVEL=trace
 ```
 
 ## Como usar o Logger
@@ -52,6 +60,9 @@ logger.info('Servidor iniciado');
 
 // Informações de depuração
 logger.debug('Processando dados');
+
+// Informações de rastreamento muito detalhadas
+logger.trace('Valores completos', objetoDetalhado);
 ```
 
 ### Logs de Conversação
@@ -90,9 +101,23 @@ Os métodos console.* são redirecionados para o logger:
 - `console.info` → `logger.info`
 - `console.debug` → `logger.debug`
 
+## Filtro de Avisos de Depreciação
+
+O sistema filtra automaticamente avisos de depreciação do Node.js, como:
+- Avisos sobre o módulo `punycode`
+- Outros avisos de depreciação com prefixo `[DEP`
+
+## Prevenção de Log Duplicado
+
+As mensagens de conversação são registradas apenas:
+- No arquivo específico de conversas
+- No console com ícones distintos (📱 e 🔄)
+- Não são duplicadas no log de aplicação geral
+
 ## Vantagens desta Implementação
 
 1. **Zero dependências externas** - não depende de bibliotecas como Winston
 2. **Código leve e fácil de entender** - implementação direta
 3. **Desempenho aprimorado** - usa recursos nativos do Node.js
-4. **Formato consistente** - mantém o mesmo formato de logs visual 
+4. **Formato consistente** - mantém o mesmo formato de logs visual
+5. **Evita duplicação** - cada mensagem é registrada apenas uma vez 
