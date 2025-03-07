@@ -14,7 +14,7 @@ const router = express.Router();
 router.post("/webhook", async (req, res, next) => {
   try {
     // Loga o payload recebido do webhook
-    logger.debug("Webhook recebido", req.body);
+    console.log("Webhook recebido", req.body);
     
     const { type, fromMe, chatLid, text, phone, audio, image } = req.body;
     
@@ -22,13 +22,13 @@ router.post("/webhook", async (req, res, next) => {
       // Verificar se é uma imagem
       if (image?.imageUrl) {
         const caption = image.caption || '';
-        logger.info(`Recebido imagem do usuário ${phone} ${caption ? `com legenda: "${caption}"` : 'sem legenda'}`);
+        console.log(`Recebido imagem do usuário ${phone} ${caption ? `com legenda: "${caption}"` : 'sem legenda'}`);
         
         // Registrando a mensagem de imagem
         if (caption) {
-          logger.userMessage(phone, `[IMAGEM] ${caption}`);
+          console.log(`Usuário ${phone}: [IMAGEM] ${caption}`);
         } else {
-          logger.userMessage(phone, "[IMAGEM sem legenda]");
+          console.log(`Usuário ${phone}: [IMAGEM sem legenda]`);
         }
         
         // Processar imagem com legenda (se houver)
@@ -36,15 +36,15 @@ router.post("/webhook", async (req, res, next) => {
       }
       // Verificar se é uma mensagem de áudio
       else if (audio?.audioUrl) {
-        logger.info(`Recebido áudio do usuário ${phone} (${audio.seconds}s)`);
-        logger.userMessage(phone, `[ÁUDIO ${audio.seconds}s]`);
+        console.log(`Recebido áudio do usuário ${phone} (${audio.seconds}s)`);
+        console.log(`Usuário ${phone}: [ÁUDIO ${audio.seconds}s]`);
         
         await processAudioMessage(chatLid, phone, audio.audioUrl);
       }
       // Verificar se é uma mensagem de texto
       else if (text?.message) {
         const message = text.message || "";
-        logger.userMessage(phone, message);
+        console.log(`Usuário ${phone}: ${message}`);
         
         await getChat(chatLid, phone, message);
       }
@@ -53,7 +53,7 @@ router.post("/webhook", async (req, res, next) => {
     // Sempre retorna 200 para o webhook, mesmo que ocorram problemas
     res.sendStatus(200);
   } catch (error) {
-    logger.error("Erro no webhook", { error: error.message });
+    console.error("Erro no webhook", error.message);
     // Sempre retorna 200 para o webhook
     res.sendStatus(200);
     next(error);
