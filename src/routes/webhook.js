@@ -2,7 +2,6 @@
 import express from 'express';
 import { getChat } from '../services/conversationService.js';
 import { processAudioMessage } from '../services/audioService.js';
-import { processImage } from '../services/imageService.js';
 // import { sendAudioReceiptConfirmation } from '../services/zapiService.js';
 import logger from '../utils/logger.js';
 
