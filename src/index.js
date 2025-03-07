@@ -31,9 +31,9 @@ const prisma = new PrismaClient();
 const startDb = async () => {
   try {
     await prisma.$connect();
-    logger.success('Conexão com o banco de dados estabelecida');
+    logger.info('Conexão com o banco de dados estabelecida');
   } catch (error) {
-    logger.error('Erro ao conectar ao banco:', { error: error.message, stack: error.stack });
+    logger.error('Erro ao conectar ao banco: ' + error.message);
     process.exit(1);
   }
 };
@@ -47,7 +47,7 @@ app.use(checkMessageSize);
 
 // Inicialização segura do servidor
 async function startServer() {
-  logger.destaque('INICIANDO SERVIDOR');
+  logger.info('Iniciando servidor');
   
   await startDb();
 
@@ -65,13 +65,12 @@ async function startServer() {
 
   // Inicia o servidor
   app.listen(config.port, () => {
-    logger.destaqueSucesso(`SERVIDOR PRONTO NA PORTA ${config.port}`);
+    logger.info(`Servidor rodando na porta ${config.port}`);
   });
 }
 
 // Inicia a aplicação de forma segura
 startServer().catch(error => {
-  logger.destaqueErro('FALHA NA INICIALIZAÇÃO');
-  logger.error('Detalhes do erro:', { error: error.message, stack: error.stack });
+  logger.error('Falha na inicialização: ' + error.message);
   process.exit(1);
 });
