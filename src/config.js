@@ -6,6 +6,9 @@ export default {
   // Configuração da porta do servidor
   port: process.env.PORT || 3000,
 
+  // Chave de API para operações administrativas
+  adminApiKey: process.env.ADMIN_API_KEY || 'admin-secret-key',
+
   // Configuração da API OpenAI
   openai: {
     apiKey: process.env.OPENAI_API_KEY,
@@ -42,9 +45,6 @@ export default {
     environment: process.env.PINECONE_ENVIRONMENT,
     index: process.env.PINECONE_INDEX
   },
-
-  // API Admin Key (caso necessário para autenticação)
-  adminApiKey: process.env.ADMIN_API_KEY,
 
   // API Jina
   jina: {

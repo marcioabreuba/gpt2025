@@ -27,6 +27,46 @@ const TOKEN_LIMIT = 200000;
 const activeThreads = new Map();
 // Mapa para controlar processamentos em andamento por telefone
 const processingQueue = new Map();
+// Timestamp da última limpeza forçada
+let lastForceCleanupTime = Date.now();
+
+// Função para forçar a limpeza dos maps de processamento
+export function forceResetProcessingState() {
+  console.log("=== FORÇANDO RESET DO ESTADO DE PROCESSAMENTO ===");
+  console.log(`Antes do reset: ${processingQueue.size} processamentos em fila, ${activeThreads.size} threads ativos`);
+  
+  const phoneNumbers = Array.from(processingQueue.keys());
+  const threadIds = Array.from(activeThreads.keys());
+  
+  processingQueue.clear();
+  activeThreads.clear();
+  lastForceCleanupTime = Date.now();
+  
+  console.log(`Estado de processamento resetado! Liberados: ${phoneNumbers.join(', ')}`);
+  console.log(`Threads liberados: ${threadIds.join(', ')}`);
+  console.log("=== RESET CONCLUÍDO ===");
+  
+  return { 
+    clearedPhones: phoneNumbers,
+    clearedThreads: threadIds
+  };
+}
+
+// Verificação periódica para identificar processamentos travados (executa a cada 5 minutos)
+setInterval(() => {
+  const now = Date.now();
+  // Verifica se há processamentos ativos há mais de 10 minutos
+  const MAX_PROCESSING_TIME = 10 * 60 * 1000; // 10 minutos
+  
+  if (processingQueue.size > 0 || activeThreads.size > 0) {
+    console.log(`Verificando processamentos travados: ${processingQueue.size} em fila, ${activeThreads.size} threads ativos`);
+    
+    if (now - lastForceCleanupTime > MAX_PROCESSING_TIME) {
+      console.log("Detectada possível condição de bloqueio. Realizando limpeza automática...");
+      forceResetProcessingState();
+    }
+  }
+}, 5 * 60 * 1000); // 5 minutos
 
 export async function getChat(userId, phone, message, imageUrl, caption = '', isAudioTranscription = false) {
   try {
@@ -38,9 +78,41 @@ export async function getChat(userId, phone, message, imageUrl, caption = '', is
       throw new Error('userId e message ou imageUrl são obrigatórios');
     }
 
+    // Comandos especiais são processados imediatamente
+    if (message) {
+      // Comando para forçar reset do estado de processamento
+      if (message.toLowerCase().includes('force_reset')) {
+        const resetResult = forceResetProcessingState();
+        await sendReplyZAPI(phone, `🔄 Estado de processamento resetado com sucesso!\n${resetResult.clearedPhones.length} telefones liberados\n${resetResult.clearedThreads.length} threads liberados`);
+        return { status: "reset_complete" };
+      }
+      
+      // Comando para apagar thread
+      if (message.toLowerCase().includes('apagar thread_id')) {
+        // Para este comando específico, ignoramos o estado do processamento em fila
+        // para garantir que sempre seja executado
+        await handleDeleteThread(userId);
+        await sendReplyZAPI(phone, "Histórico resetado com sucesso! 😊");
+        return { status: "thread_deleted" };
+      }
+    }
+
     // Inicializa buffer de mensagens do usuário
     if (!messageBuffers.has(userId)) {
       messageBuffers.set(userId, []);
+    }
+
+    // Verifica se o processamento está travado há muito tempo
+    if (processingQueue.has(phone)) {
+      const MAX_WAIT_TIME = 5 * 60 * 1000; // 5 minutos
+      const now = Date.now();
+      
+      // Se o processamento estiver ativo há mais de 5 minutos, fazemos reset
+      if (!processingQueue.get(phone).startTime || 
+          (now - processingQueue.get(phone).startTime > MAX_WAIT_TIME)) {
+        console.log(`Detectado processamento travado para ${phone}. Resetando estado...`);
+        processingQueue.delete(phone);
+      }
     }
 
     // Armazena mensagens no buffer com phone
@@ -67,8 +139,8 @@ export async function getChat(userId, phone, message, imageUrl, caption = '', is
         return;
       }
       
-      // Marca este telefone como tendo um processamento em andamento
-      processingQueue.set(phone, true);
+      // Marca este telefone como tendo um processamento em andamento com timestamp
+      processingQueue.set(phone, { startTime: Date.now() });
       console.log(`Iniciando processamento em fila para ${phone}`);
       
       let threadId = null;
@@ -155,14 +227,7 @@ export async function getChat(userId, phone, message, imageUrl, caption = '', is
               formattedMessage = `${formattedMessage} [Data: ${currentDate}] [Phone: ${phone}]`;
             }
             
-            // Se for comando para apagar thread, processamos imediatamente
-            if (formattedMessage.toLowerCase().includes('apagar thread_id')) {
-              await handleDeleteThread(userId);
-              await sendReplyZAPI(phone, "Histórico resetado com sucesso! 😊");
-              return;
-            }
-            
-            // Armazenamos outras mensagens de texto para processar juntas
+            // Armazenamos mensagens de texto para processar juntas
             textMessages.push(formattedMessage);
             
           } else if (item.type === 'image' && !imageProcessed) {
