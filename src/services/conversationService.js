@@ -15,6 +15,7 @@ import { processImage } from './servidorImagem.js';
 import { sendReplyZAPI } from './zapiService.js';
 import OpenAI from 'openai';
 import logger from '../utils/logger.js';
+import cleanCitations from '../utils/cleanCitations.js';
 
 const openai = new OpenAI({ apiKey: config.openai.apiKey });
 const messageBuffers = new Map();
@@ -151,17 +152,20 @@ export async function getChat(userId, phone, message, imageUrl, caption = '', is
           throw new Error('Nenhuma resposta do assistente encontrada');
         }
 
+        // Limpa as citações da resposta antes de armazenar
+        const cleanedResponse = cleanCitations(assistantMessage.content[0].text.value);
+
         await storeMessageInConversation(userId, threadId, {
           role: 'assistant',
-          content: assistantMessage.content[0].text.value,
+          content: cleanedResponse,
           timestamp: Date.now()
         });
 
         // Registrar a resposta que será enviada
-        console.log(`IA → ${phone}: ${assistantMessage.content[0].text.value}`);
+        console.log(`IA → ${phone}: ${cleanedResponse}`);
 
-        // Envia resposta via WhatsApp
-        await sendReplyZAPI(phone, assistantMessage.content[0].text.value);
+        // Envia resposta via WhatsApp - usar a resposta já limpa
+        await sendReplyZAPI(phone, cleanedResponse);
 
       } catch (error) {
         console.error('Erro no processamento:', error);
