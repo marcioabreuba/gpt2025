@@ -25,7 +25,7 @@ const logger = winston.createLogger({
  */
 export async function sendReplyZAPI(phone, message) {
   try {
-    // Limpa as citações da mensagem antes de enviar
+    // Limpa as citações, logs e ajusta formatação da mensagem antes de enviar
     const cleanMessage = cleanCitations(message);
     
     // Registra a mensagem nos logs

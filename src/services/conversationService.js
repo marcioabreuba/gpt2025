@@ -152,7 +152,7 @@ export async function getChat(userId, phone, message, imageUrl, caption = '', is
           throw new Error('Nenhuma resposta do assistente encontrada');
         }
 
-        // Limpa as citações da resposta antes de armazenar
+        // Limpa as citações da resposta, logs e ajusta formatação
         const cleanedResponse = cleanCitations(assistantMessage.content[0].text.value);
 
         await storeMessageInConversation(userId, threadId, {
