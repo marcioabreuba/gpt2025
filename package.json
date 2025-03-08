@@ -9,7 +9,6 @@
     "start:old": "node src/index.js",
     "start:no-warnings": "node --no-warnings src/index.js",
     "check:assistant": "node src/scripts/checkAssistantConfig.js",
-    "test:citations": "node src/scripts/testCitationRemoval.js",
     "init:vector-store": "node src/scripts/initVectorStore.js",
     "migrate:pinecone": "node src/scripts/migratePineconeToOpenAI.js"
   },

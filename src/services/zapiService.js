@@ -3,7 +3,6 @@
 import axios from 'axios';
 import config from '../config.js';
 import winston from 'winston';
-import { formatWhatsAppMessage } from '../utils/textUtils.js';
 
 // Configure o logger se não estiver usando o logger global
 const logger = winston.createLogger({
@@ -25,14 +24,11 @@ const logger = winston.createLogger({
  */
 export async function sendReplyZAPI(phone, message) {
   try {
-    // Formata a mensagem para WhatsApp (remove citações e aplica formatação)
-    const cleanedMessage = formatWhatsAppMessage(message);
-    
-    // Registra a mensagem limpa nos logs
-    logger.info(`IA → ${phone}: ${cleanedMessage}`);
+    // Registra a mensagem nos logs
+    logger.info(`IA → ${phone}: ${message}`);
     
     const url = `https://api.z-api.io/instances/${config.zapi.instanceId}/token/${config.zapi.token}/send-text`;
-    const payload = { phone, message: cleanedMessage, delayTyping: 15 };
+    const payload = { phone, message, delayTyping: 15 };
     const response = await axios.post(url, payload, {
       headers: { "Client-Token": config.zapi.clientToken }
     });
