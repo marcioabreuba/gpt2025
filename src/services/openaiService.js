@@ -29,21 +29,48 @@ export async function storeMessageInConversation(userId, threadId, message) {
   await redisClient.rPush(key, JSON.stringify(message));
 }
 
-export async function addMessageWithRetry(threadId, message, maxRetries = 3, delay = 3000) {
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+export async function addMessageWithRetry(threadId, message, maxRetries = 3, initialDelay = 1000) {
+  let retries = 0;
+  let lastError = null;
+  let delay = initialDelay;
+  
+  while (retries < maxRetries) {
     try {
       await openai.beta.threads.messages.create(threadId, {
         role: "user",
         content: message
       });
-      console.log(`Mensagem adicionada ao thread ${threadId} na tentativa ${attempt}`);
-      return;
+      
+      console.log(`Mensagem adicionada ao thread ${threadId} na tentativa ${retries + 1}`);
+      return true;
     } catch (error) {
-      console.error(`Tentativa ${attempt} falhou: ${error.message}`);
-      if (attempt === maxRetries) throw new Error(`Falha após ${maxRetries} tentativas: ${error.message}`);
-      await new Promise(resolve => setTimeout(resolve, delay));
+      retries++;
+      lastError = error;
+      
+      // Verifica se o erro é por um run ativo
+      const isRunActiveError = error.message && error.message.includes("while a run") && error.message.includes("is active");
+      
+      if (isRunActiveError) {
+        console.log(`Tentativa ${retries} falhou: ${error.message}`);
+        
+        // Aumenta o tempo de espera exponencialmente
+        delay = initialDelay * Math.pow(2, retries - 1);
+        
+        // Espera antes de tentar novamente
+        await new Promise(resolve => setTimeout(resolve, delay));
+      } else {
+        // Para outros tipos de erro, pode não fazer sentido continuar tentando
+        console.error(`Erro não recuperável ao adicionar mensagem: ${error.message}`);
+        break;
+      }
     }
   }
+  
+  const errorMessage = `Falha após ${retries} tentativas: ${lastError ? lastError.message : 'Erro desconhecido'}`;
+  console.error(errorMessage);
+  
+  // Em vez de lançar exceção que pode derrubar a aplicação, retornamos false para indicar falha
+  return false;
 }
 
 export async function getTokenUsage(threadId) {
@@ -82,21 +109,55 @@ export async function summarizeContext(threadId) {
 
 export async function waitForRunCompletion(threadId, runId, maxRetries = 30, delay = 8000) {
   let retries = 0;
-  while (retries++ < maxRetries) {
+  const maxDelayMs = 20000; // 20 segundos máximo de espera entre tentativas
+  let currentDelay = delay;
+  
+  while (retries < maxRetries) {
     try {
+      console.log(`Verificando status do run ${runId} (tentativa ${retries + 1}/${maxRetries})`);
       const run = await openai.beta.threads.runs.retrieve(threadId, runId);
       
-      if (run.status === "completed") return run;
-      if (run.status === "requires_action") {
-        await handleToolCalls(threadId, run);
+      if (run.status === "completed") {
+        console.log(`Run ${runId} completado com sucesso`);
+        return { success: true, run };
       }
       
-      await new Promise(resolve => setTimeout(resolve, delay * retries));
+      if (run.status === "requires_action") {
+        console.log(`Run ${runId} requer ação (tool calls)`);
+        await handleToolCalls(threadId, run);
+      } else if (run.status === "failed") {
+        console.error(`Run ${runId} falhou: ${run.last_error?.message || 'Erro desconhecido'}`);
+        return { success: false, error: run.last_error };
+      } else if (run.status === "cancelled") {
+        console.log(`Run ${runId} foi cancelado`);
+        return { success: false, error: { message: 'Run cancelado' } };
+      } else if (run.status === "expired") {
+        console.log(`Run ${runId} expirou`);
+        return { success: false, error: { message: 'Run expirou' } };
+      } else {
+        console.log(`Run ${runId} em andamento, status: ${run.status}`);
+      }
+      
+      retries++;
+      // Aumenta o tempo de espera exponencialmente com limite máximo
+      currentDelay = Math.min(delay * (1.5 ** retries), maxDelayMs);
+      await new Promise(resolve => setTimeout(resolve, currentDelay));
     } catch (error) {
-      console.error(`Erro no run ${runId}: ${error.message}`);
-      if (retries === maxRetries) throw new Error(`Run não concluído após ${maxRetries} tentativas`);
+      console.error(`Erro ao verificar run ${runId}: ${error.message}`);
+      retries++;
+      
+      if (retries >= maxRetries) {
+        console.error(`Atingido máximo de tentativas (${maxRetries}) para o run ${runId}`);
+        return { success: false, error: { message: `Run não concluído após ${maxRetries} tentativas: ${error.message}` } };
+      }
+      
+      // Aguarda antes da próxima tentativa
+      await new Promise(resolve => setTimeout(resolve, currentDelay));
     }
   }
+  
+  console.error(`Tempo máximo excedido para o run ${runId}`);
+  return { success: false, error: { message: `Run não concluído após ${maxRetries} tentativas` } };
 }
 
 async function handleToolCalls(threadId, run) {

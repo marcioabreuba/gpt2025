@@ -61,131 +61,168 @@ export async function getChat(userId, phone, message, imageUrl, caption = '', is
 
     // Novo timeout para processamento
     bufferTimeouts.set(userId, setTimeout(async () => {
+      // Evita processamento duplicado - se já estiver processando para este usuário, não inicia novo
+      if (processingQueue.has(phone)) {
+        console.log(`Processamento já em andamento para ${phone}, ignorando buffer duplicado`);
+        return;
+      }
+      
+      // Marca este telefone como tendo um processamento em andamento
+      processingQueue.set(phone, true);
+      console.log(`Iniciando processamento em fila para ${phone}`);
+      
+      let threadId = null;
+      
       try {
-        // Verifica se já existe um processamento ativo para este telefone
-        if (processingQueue.has(phone)) {
-          console.log(`Já existe um processamento em fila para ${phone}, aguardando...`);
-          
-          // Aguarda até que o processamento anterior seja concluído
-          await new Promise(resolve => {
-            const checkInterval = setInterval(() => {
-              if (!processingQueue.has(phone)) {
-                clearInterval(checkInterval);
-                resolve();
-              }
-            }, 1000); // Verifica a cada segundo
-          });
+        const bufferedMessages = messageBuffers.get(userId);
+        if (!bufferedMessages || bufferedMessages.length === 0) {
+          console.log(`Não há mensagens para processar para ${userId}`);
+          return;
         }
         
-        // Marca este telefone como tendo um processamento em fila
-        processingQueue.set(phone, true);
-        console.log(`Iniciando processamento em fila para ${phone}`);
+        // Fazemos uma cópia e limpamos o buffer imediatamente
+        const messagesToProcess = [...bufferedMessages];
+        messageBuffers.delete(userId);
+        bufferTimeouts.delete(userId);
         
-        try {
-          const bufferedMessages = messageBuffers.get(userId);
-          if (!bufferedMessages || bufferedMessages.length === 0) {
-            console.log(`Não há mensagens para processar para ${userId}`);
-            return;
-          }
-          
-          messageBuffers.delete(userId);
-          bufferTimeouts.delete(userId);
+        console.log(`Processando ${messagesToProcess.length} mensagens para ${userId}`);
 
-          const currentDate = moment().tz(config.timezone).format('DD/MM/YYYY');
-          let threadId = await redisClient.get(`threadId:${userId}`);
+        const currentDate = moment().tz(config.timezone).format('DD/MM/YYYY');
+        threadId = await redisClient.get(`threadId:${userId}`);
 
-          // Cria novo thread se necessário
-          if (!threadId) {
-            const greeting = getTimeBasedGreeting();
-            const initialMessage = `${greeting} [Data: ${currentDate}] [Phone: ${phone}]`;
-            const thread = await createThread(userId, initialMessage);
-            threadId = thread.id;
+        // Cria novo thread se necessário
+        if (!threadId) {
+          const greeting = getTimeBasedGreeting();
+          const initialMessage = `${greeting} [Data: ${currentDate}] [Phone: ${phone}]`;
+          const thread = await createThread(userId, initialMessage);
+          threadId = thread.id;
+          await redisClient.set(`threadId:${userId}`, threadId);
+          await storeMessageInConversation(userId, threadId, { 
+            role: 'user', 
+            content: initialMessage, 
+            timestamp: Date.now() 
+          });
+        } else {
+          // Verificação de limite de tokens
+          const totalTokens = await getTokenUsage(threadId);
+          if (totalTokens > TOKEN_LIMIT) {
+            const summarizedContext = await summarizeContext(threadId);
+            const newThread = await createThread(userId, 
+              `[Continuação] [Phone: ${phone}] Contexto: ${summarizedContext}`
+            );
+            threadId = newThread.id;
             await redisClient.set(`threadId:${userId}`, threadId);
-            await storeMessageInConversation(userId, threadId, { 
-              role: 'user', 
-              content: initialMessage, 
-              timestamp: Date.now() 
-            });
-          } else {
-            // Verificação de limite de tokens
-            const totalTokens = await getTokenUsage(threadId);
-            if (totalTokens > TOKEN_LIMIT) {
-              const summarizedContext = await summarizeContext(threadId);
-              const newThread = await createThread(userId, 
-                `[Continuação] [Phone: ${phone}] Contexto: ${summarizedContext}`
-              );
-              threadId = newThread.id;
-              await redisClient.set(`threadId:${userId}`, threadId);
-              await addMessageWithRetry(threadId, summarizedContext);
-            }
+            await addMessageWithRetry(threadId, summarizedContext);
           }
+        }
 
-          // Espera se houver um run ativo neste thread
-          if (activeThreads.has(threadId)) {
-            console.log(`Thread ${threadId} está ocupado, aguardando...`);
-            
-            await new Promise(resolve => {
-              const checkInterval = setInterval(() => {
-                if (!activeThreads.has(threadId)) {
-                  clearInterval(checkInterval);
-                  resolve();
-                }
-              }, 1000);
-            });
+        // Espera se houver um run ativo neste thread
+        if (activeThreads.has(threadId)) {
+          console.log(`Thread ${threadId} está ocupado, aguardando...`);
+          
+          // Aguarda até 60 segundos pela liberação do thread
+          let waitTime = 0;
+          const maxWaitTime = 60000; // 60 segundos
+          const checkInterval = 1000; // 1 segundo
+          
+          while (activeThreads.has(threadId) && waitTime < maxWaitTime) {
+            await new Promise(resolve => setTimeout(resolve, checkInterval));
+            waitTime += checkInterval;
           }
           
-          // Marca este thread como ocupado
-          activeThreads.set(threadId, true);
-          console.log(`Thread ${threadId} marcado como ocupado`);
+          if (activeThreads.has(threadId)) {
+            console.log(`Tempo de espera excedido para thread ${threadId}, forçando liberação`);
+            activeThreads.delete(threadId);
+          }
+        }
+        
+        // Marca este thread como ocupado
+        activeThreads.set(threadId, true);
+        console.log(`Thread ${threadId} marcado como ocupado`);
 
-          // Processa mensagens bufferizadas
-          for (const item of bufferedMessages) {
-            if (item.type === 'text') {
-              let formattedMessage = item.content;
+        // Processa mensagens bufferizadas
+        let textMessages = [];
+        let imageProcessed = false;
+        
+        // Primeiro, processamos comandos especiais e imagens
+        for (const item of messagesToProcess) {
+          if (item.type === 'text') {
+            let formattedMessage = item.content;
+            
+            if (item.meta.isAudioTranscription) {
+              formattedMessage = `[Transcrição de áudio]: ${formattedMessage} [Data: ${currentDate}] [Phone: ${phone}]`;
+            } else {
+              formattedMessage = `${formattedMessage} [Data: ${currentDate}] [Phone: ${phone}]`;
+            }
+            
+            // Se for comando para apagar thread, processamos imediatamente
+            if (formattedMessage.toLowerCase().includes('apagar thread_id')) {
+              await handleDeleteThread(userId);
+              await sendReplyZAPI(phone, "Histórico resetado com sucesso! 😊");
+              return;
+            }
+            
+            // Armazenamos outras mensagens de texto para processar juntas
+            textMessages.push(formattedMessage);
+            
+          } else if (item.type === 'image' && !imageProcessed) {
+            try {
+              const description = await processImage(item.content);
+              const instruction = `[Imagem] ${description} [Phone: ${phone}]`;
               
-              if (item.meta.isAudioTranscription) {
-                formattedMessage = `[Transcrição de áudio]: ${formattedMessage} [Data: ${currentDate}] [Phone: ${phone}]`;
-              } else {
-                formattedMessage = `${formattedMessage} [Data: ${currentDate}] [Phone: ${phone}]`;
-              }
-              
-              if (formattedMessage.toLowerCase().includes('apagar thread_id')) {
-                await handleDeleteThread(userId);
-                await sendReplyZAPI(phone, "Histórico resetado com sucesso! 😊");
-                return;
-              }
-
               await storeMessageInConversation(userId, threadId, {
                 role: 'user',
-                content: formattedMessage,
+                content: instruction,
                 timestamp: Date.now()
               });
-              await addMessageWithRetry(threadId, formattedMessage);
-
-            } else if (item.type === 'image') {
-              try {
-                const description = await processImage(item.content);
-                const instruction = `[Imagem] ${description} [Phone: ${phone}]`;
-                
-                await storeMessageInConversation(userId, threadId, {
-                  role: 'user',
-                  content: instruction,
-                  timestamp: Date.now()
-                });
-                await addMessageWithRetry(threadId, instruction);
-              } catch (error) {
-                console.error('Erro no processamento de imagem:', error);
+              
+              // Para imagens, adicionamos imediatamente ao thread
+              const addSuccess = await addMessageWithRetry(threadId, instruction);
+              if (!addSuccess) {
+                console.error(`Falha ao adicionar imagem ao thread ${threadId}`);
                 await sendReplyZAPI(phone, "Ops! Não consegui entender essa imagem. 🫣 Pode descrever brevemente?");
+                // Continuamos o processamento mesmo se falhar a adição da imagem
+              } else {
+                imageProcessed = true;
               }
+
+            } catch (error) {
+              console.error('Erro no processamento de imagem:', error);
+              await sendReplyZAPI(phone, "Ops! Não consegui entender essa imagem. 🫣 Pode descrever brevemente?");
             }
           }
+        }
+        
+        // Consolidamos todas as mensagens de texto em uma única, se houver várias
+        if (textMessages.length > 0) {
+          const consolidatedMessage = textMessages.join("\n\n");
+          console.log(`Mensagem consolidada para ${userId}: ${consolidatedMessage}`);
+          
+          await storeMessageInConversation(userId, threadId, {
+            role: 'user',
+            content: consolidatedMessage,
+            timestamp: Date.now()
+          });
+          
+          const addSuccess = await addMessageWithRetry(threadId, consolidatedMessage);
+          if (!addSuccess) {
+            console.error(`Falha ao adicionar mensagem ao thread ${threadId}, abortando processamento`);
+            throw new Error('Falha ao adicionar mensagem ao thread');
+          }
+        }
 
-          // Executa interação com OpenAI
+        // Executa interação com OpenAI apenas se houver mensagens de texto ou imagem
+        if (textMessages.length > 0 || imageProcessed) {
           const run = await openai.beta.threads.runs.create(threadId, { 
             assistant_id: config.openai.assistantId 
           });
           
-          await waitForRunCompletion(threadId, run.id);
+          const runResult = await waitForRunCompletion(threadId, run.id);
+          
+          if (!runResult.success) {
+            console.error(`Falha ao completar run: ${runResult.error?.message || 'Erro desconhecido'}`);
+            throw new Error(`Falha ao processar mensagem: ${runResult.error?.message}`);
+          }
 
           // Obtém e processa resposta
           const messagesResponse = await openai.beta.threads.messages.list(threadId);
@@ -216,26 +253,29 @@ export async function getChat(userId, phone, message, imageUrl, caption = '', is
           await sendReplyZAPI(phone, cleanedResponse);
           
           return cleanedResponse;
-        } catch (error) {
-          console.error('Erro no processamento:', error);
+        } else {
+          console.log(`Nenhuma mensagem processável encontrada para ${userId}`);
+        }
+      } catch (error) {
+        console.error('Erro no processamento:', error);
+        
+        try {
           await sendReplyZAPI(phone, 
             "Estou tendo dificuldades técnicas... 🛠️ Por favor, tente novamente mais tarde! 😊"
           );
-          throw error;
-        } finally {
-          // Independente do resultado, marca o thread como livre
-          if (threadId) {
-            activeThreads.delete(threadId);
-            console.log(`Thread ${threadId} marcado como livre`);
-          }
-          // Libera o processamento em fila
-          processingQueue.delete(phone);
-          console.log(`Processamento em fila concluído para ${phone}`);
+        } catch (sendError) {
+          console.error('Erro ao enviar mensagem de erro:', sendError);
         }
-      } catch (error) {
-        // Garante que o processamento em fila é liberado mesmo em caso de erro
+      } finally {
+        // Independente do resultado, marca o thread como livre (se existir)
+        if (threadId) {
+          activeThreads.delete(threadId);
+          console.log(`Thread ${threadId} marcado como livre`);
+        }
+        
+        // Libera o processamento em fila
         processingQueue.delete(phone);
-        console.error(`Erro no processamento em fila: ${error.message}`);
+        console.log(`Processamento em fila concluído para ${phone}`);
       }
     }, BUFFER_DELAY));
 
