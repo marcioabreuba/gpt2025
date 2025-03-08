@@ -103,12 +103,17 @@ async function handleToolCalls(threadId, run) {
   const toolCalls = run.required_action.submit_tool_outputs.tool_calls;
   if (!toolCalls || toolCalls.length === 0) return;
 
+  console.log(`Processando ${toolCalls.length} tool calls para o thread ${threadId}`);
+  
   const toolOutputs = [];
 
   for (const toolCall of toolCalls) {
     let output;
     
     try {
+      console.log(`Tool call: ${JSON.stringify(toolCall)}`);
+      console.log(`threadId: ${threadId}`);
+      
       switch(toolCall.function.name) {
         case "get_products_info":
           console.log("toolCall", toolCall);
@@ -135,9 +140,13 @@ async function handleToolCalls(threadId, run) {
     }
   }
 
+  console.log(`Enviando ${toolOutputs.length} respostas para o run ${run.id}`);
+  
   await openai.beta.threads.runs.submitToolOutputs(threadId, run.id, {
     tool_outputs: toolOutputs
   });
+  
+  console.log(`Tool outputs enviados com sucesso`);
 }
 
 async function handleProductsInfo(toolCall) {
