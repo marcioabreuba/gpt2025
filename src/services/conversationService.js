@@ -25,62 +25,69 @@ const TOKEN_LIMIT = 200000;
 
 // Mapa para controlar threads ativos
 const activeThreads = new Map();
+// Mapa para controlar processamentos em andamento por telefone
+const processingQueue = new Map();
 
 export async function getChat(userId, phone, message, imageUrl, caption = '', isAudioTranscription = false) {
   try {
-    // Verifica se já existe um processamento ativo para este telefone
-    if (activeThreads.has(phone)) {
-      console.log(`Já existe um processamento ativo para ${phone}, enfileirando mensagem...`);
-      
-      // Aguarda até que o processamento anterior seja concluído
-      await new Promise(resolve => {
-        const checkInterval = setInterval(() => {
-          if (!activeThreads.has(phone)) {
-            clearInterval(checkInterval);
-            resolve();
-          }
-        }, 1000); // Verifica a cada segundo
-      });
+    // A mensagem já é registrada no webhook, não precisamos registrar novamente aqui
+    // Removendo para evitar duplicação
+    // logger.userMessage(phone, message);
+
+    if (!userId || (!message && !imageUrl)) {
+      throw new Error('userId e message ou imageUrl são obrigatórios');
     }
-    
-    // Marca este telefone como tendo um processamento ativo
-    activeThreads.set(phone, true);
-    console.log(`Iniciando processamento para ${phone}`);
-    
-    try {
-      // A mensagem já é registrada no webhook, não precisamos registrar novamente aqui
-      // Removendo para evitar duplicação
-      // logger.userMessage(phone, message);
 
-      if (!userId || (!message && !imageUrl)) {
-        throw new Error('userId e message ou imageUrl são obrigatórios');
+    // Inicializa buffer de mensagens do usuário
+    if (!messageBuffers.has(userId)) {
+      messageBuffers.set(userId, []);
+    }
+
+    // Armazena mensagens no buffer com phone
+    messageBuffers.get(userId).push({
+      type: imageUrl ? 'image' : 'text',
+      content: imageUrl || message,
+      meta: { 
+        phone, 
+        caption,
+        isAudioTranscription
       }
+    });
 
-      // Inicializa buffer de mensagens do usuário
-      if (!messageBuffers.has(userId)) {
-        messageBuffers.set(userId, []);
-      }
+    // Reseta o timeout existente
+    if (bufferTimeouts.has(userId)) {
+      clearTimeout(bufferTimeouts.get(userId));
+    }
 
-      // Armazena mensagens no buffer com phone
-      messageBuffers.get(userId).push({
-        type: imageUrl ? 'image' : 'text',
-        content: imageUrl || message,
-        meta: { 
-          phone, 
-          caption,
-          isAudioTranscription
+    // Novo timeout para processamento
+    bufferTimeouts.set(userId, setTimeout(async () => {
+      try {
+        // Verifica se já existe um processamento ativo para este telefone
+        if (processingQueue.has(phone)) {
+          console.log(`Já existe um processamento em fila para ${phone}, aguardando...`);
+          
+          // Aguarda até que o processamento anterior seja concluído
+          await new Promise(resolve => {
+            const checkInterval = setInterval(() => {
+              if (!processingQueue.has(phone)) {
+                clearInterval(checkInterval);
+                resolve();
+              }
+            }, 1000); // Verifica a cada segundo
+          });
         }
-      });
-
-      // Reseta o timeout existente
-      if (bufferTimeouts.has(userId)) {
-        clearTimeout(bufferTimeouts.get(userId));
-      }
-
-      // Novo timeout para processamento
-      bufferTimeouts.set(userId, setTimeout(async () => {
+        
+        // Marca este telefone como tendo um processamento em fila
+        processingQueue.set(phone, true);
+        console.log(`Iniciando processamento em fila para ${phone}`);
+        
         try {
           const bufferedMessages = messageBuffers.get(userId);
+          if (!bufferedMessages || bufferedMessages.length === 0) {
+            console.log(`Não há mensagens para processar para ${userId}`);
+            return;
+          }
+          
           messageBuffers.delete(userId);
           bufferTimeouts.delete(userId);
 
@@ -112,6 +119,24 @@ export async function getChat(userId, phone, message, imageUrl, caption = '', is
               await addMessageWithRetry(threadId, summarizedContext);
             }
           }
+
+          // Espera se houver um run ativo neste thread
+          if (activeThreads.has(threadId)) {
+            console.log(`Thread ${threadId} está ocupado, aguardando...`);
+            
+            await new Promise(resolve => {
+              const checkInterval = setInterval(() => {
+                if (!activeThreads.has(threadId)) {
+                  clearInterval(checkInterval);
+                  resolve();
+                }
+              }, 1000);
+            });
+          }
+          
+          // Marca este thread como ocupado
+          activeThreads.set(threadId, true);
+          console.log(`Thread ${threadId} marcado como ocupado`);
 
           // Processa mensagens bufferizadas
           for (const item of bufferedMessages) {
@@ -189,7 +214,7 @@ export async function getChat(userId, phone, message, imageUrl, caption = '', is
 
           // Envia resposta via WhatsApp - usar a resposta já limpa
           await sendReplyZAPI(phone, cleanedResponse);
-
+          
           return cleanedResponse;
         } catch (error) {
           console.error('Erro no processamento:', error);
@@ -198,23 +223,25 @@ export async function getChat(userId, phone, message, imageUrl, caption = '', is
           );
           throw error;
         } finally {
-          // Independente do resultado, marca o processamento como concluído
-          activeThreads.delete(phone);
-          console.log(`Processamento concluído para ${phone}`);
+          // Independente do resultado, marca o thread como livre
+          if (threadId) {
+            activeThreads.delete(threadId);
+            console.log(`Thread ${threadId} marcado como livre`);
+          }
+          // Libera o processamento em fila
+          processingQueue.delete(phone);
+          console.log(`Processamento em fila concluído para ${phone}`);
         }
-      }, BUFFER_DELAY));
+      } catch (error) {
+        // Garante que o processamento em fila é liberado mesmo em caso de erro
+        processingQueue.delete(phone);
+        console.error(`Erro no processamento em fila: ${error.message}`);
+      }
+    }, BUFFER_DELAY));
 
-    } catch (error) {
-      // Garante que o thread é liberado mesmo em caso de erro
-      activeThreads.delete(phone);
-      console.error(`Erro no processamento: ${error.message}`);
-      throw error;
-    }
+    return { status: "buffered" };
   } catch (error) {
     console.error('Erro crítico no getChat:', error);
-    await sendReplyZAPI(phone, 
-      "Algo deu errado no meu sistema... ⚠️ Nossa equipe já foi notificada!"
-    );
     throw error;
   }
 }
