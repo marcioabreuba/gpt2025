@@ -100,27 +100,43 @@ export async function waitForRunCompletion(threadId, runId, maxRetries = 30, del
 }
 
 async function handleToolCalls(threadId, run) {
-  const toolCall = run.required_action.submit_tool_outputs.tool_calls[0];
-  if (!toolCall) return;
+  const toolCalls = run.required_action.submit_tool_outputs.tool_calls;
+  if (!toolCalls || toolCalls.length === 0) return;
 
-  let output;
-  switch(toolCall.function.name) {
-    case "get_products_info":
-      console.log("toolCall", toolCall);
-      output = await handleProductsInfo(toolCall);
-      break;
-    case "get_orders_info":
-      output = await handleOrdersInfo(threadId, toolCall);
-      break;
-    default:
-      throw new Error(`Função não implementada: ${toolCall.function.name}`);
+  const toolOutputs = [];
+
+  for (const toolCall of toolCalls) {
+    let output;
+    
+    try {
+      switch(toolCall.function.name) {
+        case "get_products_info":
+          console.log("toolCall", toolCall);
+          output = await handleProductsInfo(toolCall);
+          break;
+        case "get_orders_info":
+          output = await handleOrdersInfo(threadId, toolCall);
+          break;
+        default:
+          console.error(`Função não implementada: ${toolCall.function.name}`);
+          output = { error: `Função ${toolCall.function.name} não implementada` };
+      }
+
+      toolOutputs.push({
+        tool_call_id: toolCall.id,
+        output: JSON.stringify(output || {})
+      });
+    } catch (error) {
+      console.error(`Erro ao processar tool call ${toolCall.id}: ${error.message}`);
+      toolOutputs.push({
+        tool_call_id: toolCall.id,
+        output: JSON.stringify({ error: error.message })
+      });
+    }
   }
 
   await openai.beta.threads.runs.submitToolOutputs(threadId, run.id, {
-    tool_outputs: [{
-      tool_call_id: toolCall.id,
-      output: JSON.stringify(output)
-    }]
+    tool_outputs: toolOutputs
   });
 }
 
