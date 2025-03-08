@@ -2,30 +2,10 @@
  * Script para testar a remoção de citações das respostas da OpenAI
  */
 
-// Função para remover citações (cópia da implementada em zapiService.js)
-function removeCitations(message) {
-  if (!message) return message;
-  
-  // Padrão 1: Remove citações no formato 【n:n†source】
-  let cleanedMessage = message.replace(/【\d+:\d+†source】/g, '');
-  
-  // Padrão 2: Remove citações no formato 【n†source】
-  cleanedMessage = cleanedMessage.replace(/【\d+†source】/g, '');
-  
-  // Padrão 3: Remove citações no formato [n]
-  cleanedMessage = cleanedMessage.replace(/\[\d+\]/g, '');
-  
-  // Padrão 4: Remove citações no formato (Citation: n)
-  cleanedMessage = cleanedMessage.replace(/\(Citation: \d+\)/g, '');
-  
-  // Remove espaços extras que podem ter ficado após a remoção
-  cleanedMessage = cleanedMessage.replace(/\s{2,}/g, ' ').trim();
-  
-  return cleanedMessage;
-}
+import { removeCitations, formatWhatsAppMessage } from '../utils/textUtils.js';
 
-// Casos de teste
-const testCases = [
+// Casos de teste para remoção de citações
+const citationTestCases = [
   {
     input: "O prazo de garantia para troca ou devolução é de até 7 dias corridos, contados a partir da data indicada no comprovante de rastreio dos Correios. É importante lembrar que variações de até 5% nas cores e tamanhos dos produtos são admissíveis【5:0†source】.",
     expected: "O prazo de garantia para troca ou devolução é de até 7 dias corridos, contados a partir da data indicada no comprovante de rastreio dos Correios. É importante lembrar que variações de até 5% nas cores e tamanhos dos produtos são admissíveis."
@@ -49,39 +29,83 @@ const testCases = [
   {
     input: "Mensagem com múltiplas citações【1:2†source】 no meio【3†source】 do texto【4:5†source】.",
     expected: "Mensagem com múltiplas citações no meio do texto."
+  },
+  {
+    input: 'Segundo a documentação {"citation": [{"type": "document", "document_id": "abc123", "quote": "citação aqui"}]}, esse é o procedimento.',
+    expected: 'Segundo a documentação, esse é o procedimento.'
   }
 ];
 
-// Executa os testes
-console.log("Testando remoção de citações das respostas OpenAI...\n");
+// Casos de teste para formatação completa
+const formattingTestCases = [
+  {
+    input: "Texto com **negrito** e [links protegidos] e citação【5:0†source】.",
+    expected: "Texto com *negrito* e e citação."
+  },
+  {
+    input: "Texto com **múltiplas** formatações **diferentes** e [links protegidos] além de citação【5:0†source】.",
+    expected: "Texto com *múltiplas* formatações *diferentes* e além de citação."
+  }
+];
 
-let passedTests = 0;
-let failedTests = 0;
+// Executa os testes de remoção de citações
+console.log("🧪 Testando remoção de citações...\n");
 
-testCases.forEach((test, index) => {
+let passedCitationTests = 0;
+let failedCitationTests = 0;
+
+citationTestCases.forEach((test, index) => {
   const result = removeCitations(test.input);
   const passed = result === test.expected;
   
   console.log(`Teste ${index + 1}: ${passed ? '✅ PASSOU' : '❌ FALHOU'}`);
-  console.log(`Input:    "${test.input}"`);
-  console.log(`Resultado: "${result}"`);
-  console.log(`Esperado:  "${test.expected}"`);
-  console.log();
+  if (!passed) {
+    console.log(`Input:    "${test.input}"`);
+    console.log(`Resultado: "${result}"`);
+    console.log(`Esperado:  "${test.expected}"`);
+    console.log();
+  }
   
   if (passed) {
-    passedTests++;
+    passedCitationTests++;
   } else {
-    failedTests++;
+    failedCitationTests++;
   }
 });
 
-console.log("Resumo dos Testes:");
-console.log(`✅ Testes bem-sucedidos: ${passedTests}`);
-console.log(`❌ Testes falhos: ${failedTests}`);
-console.log(`Total de testes: ${testCases.length}`);
+// Executa os testes de formatação completa
+console.log("\n🧪 Testando formatação completa para WhatsApp...\n");
 
-if (failedTests === 0) {
-  console.log("\n🎉 Todos os testes passaram! A função está removendo citações corretamente.");
+let passedFormattingTests = 0;
+let failedFormattingTests = 0;
+
+formattingTestCases.forEach((test, index) => {
+  const result = formatWhatsAppMessage(test.input);
+  const passed = result === test.expected;
+  
+  console.log(`Teste ${index + 1}: ${passed ? '✅ PASSOU' : '❌ FALHOU'}`);
+  if (!passed) {
+    console.log(`Input:    "${test.input}"`);
+    console.log(`Resultado: "${result}"`);
+    console.log(`Esperado:  "${test.expected}"`);
+    console.log();
+  }
+  
+  if (passed) {
+    passedFormattingTests++;
+  } else {
+    failedFormattingTests++;
+  }
+});
+
+// Resumo dos testes
+console.log("\n📊 Resumo dos Testes:");
+console.log(`Remoção de citações: ${passedCitationTests}/${citationTestCases.length} testes passaram`);
+console.log(`Formatação completa: ${passedFormattingTests}/${formattingTestCases.length} testes passaram`);
+console.log(`Total: ${passedCitationTests + passedFormattingTests}/${citationTestCases.length + formattingTestCases.length} testes passaram`);
+
+if (failedCitationTests + failedFormattingTests === 0) {
+  console.log("\n🎉 Todos os testes passaram! A formatação de mensagens está funcionando corretamente.");
 } else {
-  console.log("\n⚠️ Alguns testes falharam. Verifique a implementação da função.");
+  console.log("\n⚠️ Alguns testes falharam. Verifique a implementação das funções.");
 } 
