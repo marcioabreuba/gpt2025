@@ -27,6 +27,8 @@ const TOKEN_LIMIT = 200000;
 const activeThreads = new Map();
 // Mapa para controlar processamentos em andamento por telefone
 const processingQueue = new Map();
+// Fila de mensagens pendentes (quando o usuário envia mensagem durante processamento)
+const pendingMessages = new Map();
 // Timestamp da última limpeza forçada
 let lastForceCleanupTime = Date.now();
 
@@ -67,6 +69,51 @@ setInterval(() => {
     }
   }
 }, 5 * 60 * 1000); // 5 minutos
+
+// Função para processar a próxima mensagem pendente de um telefone
+function processNextPendingMessage(phone) {
+  if (pendingMessages.has(phone) && pendingMessages.get(phone).length > 0) {
+    console.log(`Processando próxima mensagem pendente para ${phone}. Restantes: ${pendingMessages.get(phone).length}`);
+    
+    const nextMessage = pendingMessages.get(phone).shift();
+    if (pendingMessages.get(phone).length === 0) {
+      pendingMessages.delete(phone);
+    }
+    
+    // Processa a próxima mensagem da fila imediatamente, sem buffer de delay
+    setTimeout(() => {
+      getChat(
+        nextMessage.userId, 
+        nextMessage.phone, 
+        nextMessage.message, 
+        nextMessage.imageUrl, 
+        nextMessage.caption, 
+        nextMessage.isAudioTranscription
+      );
+    }, 500); // Pequeno delay para garantir que o estado seja limpo corretamente
+    
+    return true;
+  }
+  
+  return false;
+}
+
+// Verificação periódica para processar mensagens pendentes (a cada 30 segundos)
+setInterval(() => {
+  // Verifica se há telefones com mensagens pendentes e sem processamento ativo
+  const phonesWithPendingMessages = Array.from(pendingMessages.keys());
+  
+  if (phonesWithPendingMessages.length > 0) {
+    console.log(`Verificando ${phonesWithPendingMessages.length} telefones com mensagens pendentes`);
+    
+    for (const phone of phonesWithPendingMessages) {
+      // Se não há processamento ativo para este telefone, processa a próxima mensagem
+      if (!processingQueue.has(phone)) {
+        processNextPendingMessage(phone);
+      }
+    }
+  }
+}, 30 * 1000); // 30 segundos
 
 export async function getChat(userId, phone, message, imageUrl, caption = '', isAudioTranscription = false) {
   try {
@@ -112,6 +159,24 @@ export async function getChat(userId, phone, message, imageUrl, caption = '', is
           (now - processingQueue.get(phone).startTime > MAX_WAIT_TIME)) {
         console.log(`Detectado processamento travado para ${phone}. Resetando estado...`);
         processingQueue.delete(phone);
+      } else {
+        // Em vez de ignorar a mensagem, adicionamos à fila de processamento pendente
+        if (!pendingMessages.has(phone)) {
+          pendingMessages.set(phone, []);
+        }
+        
+        pendingMessages.get(phone).push({
+          userId,
+          phone,
+          message,
+          imageUrl,
+          caption,
+          isAudioTranscription,
+          timestamp: Date.now()
+        });
+        
+        console.log(`Processamento em andamento para ${phone}, mensagem adicionada à fila pendente. Total: ${pendingMessages.get(phone).length}`);
+        return { status: "queued" };
       }
     }
 
@@ -135,7 +200,36 @@ export async function getChat(userId, phone, message, imageUrl, caption = '', is
     bufferTimeouts.set(userId, setTimeout(async () => {
       // Evita processamento duplicado - se já estiver processando para este usuário, não inicia novo
       if (processingQueue.has(phone)) {
-        console.log(`Processamento já em andamento para ${phone}, ignorando buffer duplicado`);
+        // Em vez de ignorar o buffer, adicionamos todas as mensagens à fila pendente
+        if (!pendingMessages.has(phone)) {
+          pendingMessages.set(phone, []);
+        }
+        
+        // Obtemos as mensagens atuais no buffer
+        const bufferedMessages = messageBuffers.get(userId) || [];
+        
+        if (bufferedMessages.length > 0) {
+          // Criamos uma entrada consolidada para todas as mensagens no buffer atual
+          pendingMessages.get(phone).push({
+            userId,
+            phone,
+            message: bufferedMessages.some(m => m.type === 'text') ? 
+              bufferedMessages
+                .filter(m => m.type === 'text')
+                .map(m => m.content)
+                .join('\n\n') : 
+              null,
+            imageUrl: bufferedMessages.find(m => m.type === 'image')?.content || null,
+            caption: bufferedMessages.find(m => m.type === 'image')?.meta.caption || '',
+            isAudioTranscription: false,
+            timestamp: Date.now()
+          });
+          
+          console.log(`Processamento já em andamento para ${phone}, ${bufferedMessages.length} mensagens adicionadas à fila pendente. Total: ${pendingMessages.get(phone).length}`);
+        }
+        
+        // Limpamos o buffer atual
+        messageBuffers.delete(userId);
         return;
       }
       
@@ -341,6 +435,12 @@ export async function getChat(userId, phone, message, imageUrl, caption = '', is
         // Libera o processamento em fila
         processingQueue.delete(phone);
         console.log(`Processamento em fila concluído para ${phone}`);
+        
+        // Processa mensagens pendentes, se houver
+        if (pendingMessages.has(phone) && pendingMessages.get(phone).length > 0) {
+          console.log(`Existem ${pendingMessages.get(phone).length} mensagens pendentes para ${phone}. Processando agora...`);
+          processNextPendingMessage(phone);
+        }
       }
     }, BUFFER_DELAY));
 
