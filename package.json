@@ -7,7 +7,11 @@
   "scripts": {
     "start": "node start.js",
     "start:old": "node src/index.js",
-    "start:no-warnings": "node --no-warnings src/index.js"
+    "start:no-warnings": "node --no-warnings src/index.js",
+    "check:assistant": "node src/scripts/checkAssistantConfig.js",
+    "test:citations": "node src/scripts/testCitationRemoval.js",
+    "init:vector-store": "node src/scripts/initVectorStore.js",
+    "migrate:pinecone": "node src/scripts/migratePineconeToOpenAI.js"
   },
   "dependencies": {
     "@pinecone-database/pinecone": "^5.1.0",

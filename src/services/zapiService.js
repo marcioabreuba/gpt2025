@@ -18,17 +18,46 @@ const logger = winston.createLogger({
 });
 
 /**
+ * Remove citações de fontes das mensagens da OpenAI.
+ * @param {string} message - Mensagem original com possíveis citações.
+ * @returns {string} - Mensagem limpa sem as citações.
+ */
+function removeCitations(message) {
+  if (!message) return message;
+  
+  // Padrão 1: Remove citações no formato 【n:n†source】
+  let cleanedMessage = message.replace(/【\d+:\d+†source】/g, '');
+  
+  // Padrão 2: Remove citações no formato 【n†source】
+  cleanedMessage = cleanedMessage.replace(/【\d+†source】/g, '');
+  
+  // Padrão 3: Remove citações no formato [n]
+  cleanedMessage = cleanedMessage.replace(/\[\d+\]/g, '');
+  
+  // Padrão 4: Remove citações no formato (Citation: n)
+  cleanedMessage = cleanedMessage.replace(/\(Citation: \d+\)/g, '');
+  
+  // Remove espaços extras que podem ter ficado após a remoção
+  cleanedMessage = cleanedMessage.replace(/\s{2,}/g, ' ').trim();
+  
+  return cleanedMessage;
+}
+
+/**
  * Envia uma mensagem para um número de telefone utilizando a Z-API.
  * @param {string} phone - Número de telefone de destino.
  * @param {string} message - Conteúdo da mensagem.
  */
 export async function sendReplyZAPI(phone, message) {
   try {
-    // Registra a mensagem nos logs
-    logger.info(`IA → ${phone}: ${message}`);
+    // Remove citações de fontes antes de enviar
+    const cleanedMessage = removeCitations(message);
+    
+    // Registra a mensagem limpa nos logs
+    logger.info(`IA → ${phone}: ${cleanedMessage}`);
     
     const url = `https://api.z-api.io/instances/${config.zapi.instanceId}/token/${config.zapi.token}/send-text`;
-    const payload = { phone, message, delayTyping: 15 };
+    const payload = { phone, message: cleanedMessage, delayTyping: 15 };
     const response = await axios.post(url, payload, {
       headers: { "Client-Token": config.zapi.clientToken }
     });
