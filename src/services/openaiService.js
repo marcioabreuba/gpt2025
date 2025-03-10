@@ -212,7 +212,19 @@ async function handleProductsInfo(toolCall) {
 async function handleOrdersInfo(threadId, toolCall) {
   console.log("Tool call:", toolCall);
   console.log("threadId:", threadId);
-  const { endpoint, order_number, cpf } = JSON.parse(toolCall.function.arguments);
+  const args = JSON.parse(toolCall.function.arguments);
+  const { endpoint } = args;
+  let order_number = args.order_number || null;
+  let cpf = args.cpf || null;
+  
+  // Se o valor foi enviado como CPF mas parece ser um número de pedido (curto, até 10 dígitos)
+  // Transfere para order_number e limpa o CPF
+  if (cpf && !order_number && cpf.length <= 10 && /^\d+$/.test(cpf)) {
+    console.log(`Valor '${cpf}' enviado como CPF parece ser um número de pedido. Tratando como order_number.`);
+    order_number = cpf;
+    cpf = null;
+  }
+  
   const phone = await extractPhoneFromContext(threadId);
   
   // Passa todos os parâmetros possíveis para getOrderByNumber

@@ -20,7 +20,7 @@ import cleanCitations from '../utils/cleanCitations.js';
 const openai = new OpenAI({ apiKey: config.openai.apiKey });
 const messageBuffers = new Map();
 const bufferTimeouts = new Map();
-const BUFFER_DELAY = 10000;
+const BUFFER_DELAY = 20000;
 const TOKEN_LIMIT = 200000;
 
 // Mapa para controlar threads ativos
