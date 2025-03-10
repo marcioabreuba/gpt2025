@@ -200,7 +200,12 @@ export async function getOrderByNumber(endpoint, orderQuery, userPhone, userCpf 
     return {
       status: 'found',
       order_number: order.order_number,
-      created_at: new Date(order.created_at).toLocaleDateString('pt-BR'),
+      created_at: new Date(order.created_at).toLocaleDateString('pt-BR', { 
+        day: '2-digit', 
+        month: '2-digit', 
+        year: 'numeric',
+        timeZone: 'America/Sao_Paulo' 
+      }),
       total: `${order.total_price} ${order.currency}`,
       tracking: order.fulfillments?.[0]?.tracking_number || 'Não disponível',
       shipping_address: order.shipping_address?.address1 || 'Endereço não disponível'
