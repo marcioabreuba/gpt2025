@@ -29,8 +29,9 @@ process.on('unhandledRejection', (reason, promise) => {
   });
 });
 
-// Importa o cronjob (ele roda automaticamente)
+// Importa os cronjobs (eles rodam automaticamente)
 import './services/cronjobTraining.js'
+import './services/cronjobOrders.js'
 import { forceResetProcessingState } from './services/conversationService.js';
 
 // Rotas
