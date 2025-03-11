@@ -32,7 +32,8 @@ const identifyNumberType = (value) => {
 
 export async function findOrderByUser(phone, orderNumber, cpf) {
   try {
-    const cleanPhone = cleanNumber(phone);
+    // Telefone não será mais usado para busca
+    // const cleanPhone = cleanNumber(phone);
     let cleanOrderNumber = null;
     let cleanCpf = null;
     
@@ -60,30 +61,11 @@ export async function findOrderByUser(phone, orderNumber, cpf) {
     
     let order = null;
     
-    // 1. Primeira prioridade: buscar por telefone
-    if (cleanPhone) {
-      order = await prisma.orders.findFirst({
-        where: { 
-          phone: { contains: cleanPhone } 
-        },
-        orderBy: { createdAt: 'desc' },
-        select: {
-          orderId: true,
-          externalId: true,
-          cpf: true,
-          phone: true,
-          createdAt: true
-        }
-      });
-      
-      if (order) {
-        console.log('Pedido encontrado pelo número de telefone:', order.externalId);
-        return order;
-      }
-    }
+    // Telefone não será mais usado como critério de busca
+    // Removendo a primeira prioridade (telefone)
     
-    // 2. Segunda prioridade: buscar por número do pedido
-    if (cleanOrderNumber && !order) {
+    // 1. Primeira prioridade: buscar por número do pedido (anteriormente era a segunda)
+    if (cleanOrderNumber) {
       order = await prisma.orders.findFirst({
         where: { 
           externalId: cleanOrderNumber 
@@ -104,7 +86,7 @@ export async function findOrderByUser(phone, orderNumber, cpf) {
       }
     }
     
-    // 3. Terceira prioridade: buscar por CPF
+    // 2. Segunda prioridade: buscar por CPF (anteriormente era a terceira)
     if (cleanCpf && !order) {
       order = await prisma.orders.findFirst({
         where: { 

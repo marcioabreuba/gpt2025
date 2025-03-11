@@ -166,8 +166,8 @@ export async function getOrdersInfo(endpoint) {
 
 export async function getOrderByNumber(endpoint, orderQuery, userPhone, userCpf = null) {
   try {
-    // 1. Busca no Prisma seguindo a ordem de prioridade
-    const prismaOrder = await findOrderByUser(userPhone, orderQuery, userCpf);
+    // 1. Busca no Prisma seguindo a nova ordem de prioridade (sem telefone)
+    const prismaOrder = await findOrderByUser(null, orderQuery, userCpf);
     console.log('Prisma Order:', prismaOrder);
     
     if (!prismaOrder) {

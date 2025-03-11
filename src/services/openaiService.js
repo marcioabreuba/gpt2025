@@ -225,11 +225,12 @@ async function handleOrdersInfo(threadId, toolCall) {
     cpf = null;
   }
   
-  const phone = await extractPhoneFromContext(threadId);
+  // Removendo a extração automática do número de telefone do WhatsApp
+  // const phone = await extractPhoneFromContext(threadId);
   
-  // Passa todos os parâmetros possíveis para getOrderByNumber
-  // Respeitando a prioridade: telefone -> número do pedido -> CPF
-  return getOrderByNumber(endpoint, order_number, phone, cpf);
+  // Passa apenas número do pedido e CPF para getOrderByNumber
+  // Não envia mais o telefone extraído do WhatsApp
+  return getOrderByNumber(endpoint, order_number, null, cpf);
 }
 
 async function extractPhoneFromContext(threadId) {
