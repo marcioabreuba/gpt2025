@@ -3,7 +3,6 @@
  * - NUNCA usar formatação markdown para links [texto](url)
  * - NUNCA usar www. no início dos links
  * - NUNCA usar https:// nos links
- * - SEMPRE colocar "Link:" antes do endereço
  * - NUNCA incluir links para sites externos (correios, transportadoras, etc.)
  * - NUNCA enviar links com placeholders (CÓDIGO_RASTREIO, NOME_PRODUTO, etc.)
  */
@@ -16,12 +15,15 @@
 export function cleanLinks(text) {
   if (!text) return text;
   
+  // Etapa 0: Remover links com placeholders primeiro
+  let result = text.replace(/(Link:\s+)?[^\s]*(CÓDIGO_RASTREIO|NOME_PRODUTO|%[^%\s]+%)[^\s]*/gi, '');
+  
   // Etapa 1: Limpar links em formato markdown [texto](url)
-  let result = text.replace(/\[([^\]]+)\]\((https?:\/\/)?(?:www\.)?([^)]+)\)/g, (match, linkText, protocol, url) => {
+  result = result.replace(/\[([^\]]+)\]\((https?:\/\/)?(?:www\.)?([^)]+)\)/g, (match, linkText, protocol, url) => {
     // Se for link da tropicalize, mantém o texto e adiciona o link formatado corretamente
     if (url.includes('tropicalize.com.br')) {
       const cleanUrl = url.replace(/^https?:\/\//i, '').replace(/^www\./i, '');
-      return `${linkText}\nLink: ${cleanUrl}`;
+      return `${linkText}\n${cleanUrl}`;
     }
     // Se não for link da tropicalize, mantém só o texto
     return linkText;
@@ -39,45 +41,52 @@ export function cleanLinks(text) {
     const startIndex = match.index;
     const endIndex = startIndex + fullMatch.length;
     
-    // Verificar se já é parte de um "Link:" (até 6 caracteres antes)
+    // Verificar se já é parte de um "Link:" antes do URL
     const prefix = result.substring(Math.max(0, startIndex - 6), startIndex);
-    const isAlreadyLink = prefix.includes('Link:');
+    const isAlreadyLink = prefix.trim().endsWith('Link:');
     
-    urlMatches.push({
-      fullMatch,
-      url,
-      startIndex,
-      endIndex,
-      isAlreadyLink,
-      isTropicalize: url.includes('tropicalize.com.br')
-    });
+    // Verificar se contém placeholders (já deve ter sido tratado na etapa 0, mas por segurança)
+    const hasPlaceholder = url.match(/(CÓDIGO_RASTREIO|NOME_PRODUTO|%[^%\s]+%)/i);
+    
+    if (!hasPlaceholder) {
+      urlMatches.push({
+        fullMatch,
+        url,
+        startIndex,
+        endIndex,
+        isAlreadyLink,
+        isTropicalize: url.includes('tropicalize.com.br')
+      });
+    }
   }
   
   // Processar as URLs de trás para frente para não alterar os índices
   urlMatches.reverse().forEach(item => {
-    // Pular se já for parte de um Link:
-    if (item.isAlreadyLink) return;
+    // Se já tiver "Link:" antes, vamos removê-lo
+    let adjustedStartIndex = item.startIndex;
+    if (item.isAlreadyLink) {
+      // Encontrar onde começa o "Link:"
+      const beforeUrl = result.substring(Math.max(0, item.startIndex - 20), item.startIndex);
+      const linkIndex = beforeUrl.lastIndexOf('Link:');
+      if (linkIndex !== -1) {
+        adjustedStartIndex = item.startIndex - (beforeUrl.length - linkIndex);
+      }
+    }
     
     if (item.isTropicalize) {
       // Se for link da tropicalize, formata corretamente
       const cleanUrl = item.url.replace(/^https?:\/\//i, '').replace(/^www\./i, '');
-      result = result.substring(0, item.startIndex) + 
-               `Link: ${cleanUrl}` + 
+      result = result.substring(0, adjustedStartIndex) + 
+               cleanUrl + 
                result.substring(item.endIndex);
     } else {
       // Se não for link da tropicalize, remove o protocolo e www
       const plainUrl = item.url;
-      result = result.substring(0, item.startIndex) + 
+      result = result.substring(0, adjustedStartIndex) + 
                plainUrl + 
                result.substring(item.endIndex);
     }
   });
-  
-  // Etapa 3: Remover links com placeholders
-  result = result.replace(/Link:\s+[^\s]*(CÓDIGO_RASTREIO|NOME_PRODUTO|%[^%\s]+%)[^\s]*/gi, '');
-  
-  // Etapa 4: Verificar e corrigir duplicações de "Link:"
-  result = result.replace(/Link:\s+Link:/gi, 'Link:');
   
   return result;
 }
