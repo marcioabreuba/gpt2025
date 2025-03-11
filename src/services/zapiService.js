@@ -4,6 +4,7 @@ import axios from 'axios';
 import config from '../config.js';
 import winston from 'winston';
 import cleanCitations from '../utils/cleanCitations.js';
+import cleanLinks from '../utils/cleanLinks.js';
 
 // Configure o logger se não estiver usando o logger global
 const logger = winston.createLogger({
@@ -25,8 +26,10 @@ const logger = winston.createLogger({
  */
 export async function sendReplyZAPI(phone, message) {
   try {
-    // Limpa as citações, logs e ajusta formatação da mensagem antes de enviar
-    const cleanMessage = cleanCitations(message);
+    // Limpa as citações, links e logs e ajusta formatação da mensagem antes de enviar
+    let cleanMessage = cleanCitations(message);
+    // Aplica a limpeza de links após a limpeza de citações
+    cleanMessage = cleanLinks(cleanMessage);
     
     // Registra a mensagem nos logs
     logger.info(`IA → ${phone}: ${cleanMessage}`);
