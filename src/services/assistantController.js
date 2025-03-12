@@ -1,4 +1,8 @@
 import { sendReplyZAPI } from './zapiService.js';
+import redisClient from '../redisClient.js';
+import moment from 'moment-timezone';
+import config from '../config.js';
+import { storeMessageInConversation, addMessageWithRetry } from './openaiService.js';
 
 // Mapa para controlar quais usuários têm o assistente pausado
 const pausedAssistants = new Map();
@@ -38,6 +42,49 @@ export async function handleAssistantCommand(phone, message) {
     return { 
       handled: true, 
       status: "assistant_resumed" 
+    };
+  }
+  
+  // Se o assistente estiver pausado e não for um dos comandos acima,
+  // significa que é uma resposta manual (Helena) que deve ser armazenada na thread
+  if (isAssistantPaused(phone)) {
+    // Tenta encontrar o userId associado a este número na thread
+    try {
+      // Para o caso onde o chatId/userId é o próprio telefone (prática comum)
+      const userId = phone;
+      const threadId = await redisClient.get(`threadId:${userId}`);
+      
+      if (threadId) {
+        const currentDate = moment().tz(config.timezone).format('DD/MM/YYYY');
+        const formattedMessage = `[Resposta manual (Helena)]: ${message} [Data: ${currentDate}]`;
+        
+        // Armazena mensagem na conversa
+        await storeMessageInConversation(userId, threadId, {
+          role: 'assistant',
+          content: formattedMessage,
+          timestamp: Date.now()
+        });
+        
+        // Adiciona mensagem ao thread
+        await addMessageWithRetry(threadId, formattedMessage, 'assistant');
+        
+        console.log(`Resposta manual de Helena armazenada na thread ${threadId} para o usuário ${userId}`);
+        
+        return {
+          handled: true,
+          status: "operator_response_stored"
+        };
+      } else {
+        console.log(`Nenhuma thread encontrada para ${phone}. Não foi possível armazenar resposta manual.`);
+      }
+    } catch (error) {
+      console.error(`Erro ao armazenar resposta manual para ${phone}:`, error);
+    }
+    
+    // Mesmo se falhar em armazenar, consideramos tratado para não processar mais
+    return {
+      handled: true,
+      status: "assistant_paused_message"
     };
   }
   

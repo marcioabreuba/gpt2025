@@ -143,17 +143,132 @@ export async function getChat(userId, phone, message, imageUrl, caption = '', is
         await sendReplyZAPI(phone, "Histórico resetado com sucesso! 😊");
         return { status: "thread_deleted" };
       }
-      
-      // Se o assistente estiver pausado, não processa a mensagem
-      if (isAssistantPaused(phone)) {
-        console.log(`Assistente pausado para ${phone}. Mensagem não será processada pelo bot.`);
-        return { status: "assistant_paused" };
-      }
     }
 
     // Inicializa buffer de mensagens do usuário
     if (!messageBuffers.has(userId)) {
       messageBuffers.set(userId, []);
+    }
+
+    // Armazena mensagens no buffer com phone, mesmo que o assistente esteja pausado
+    messageBuffers.get(userId).push({
+      type: imageUrl ? 'image' : 'text',
+      content: imageUrl || message,
+      meta: { 
+        phone, 
+        caption,
+        isAudioTranscription
+      }
+    });
+
+    // Reseta o timeout existente
+    if (bufferTimeouts.has(userId)) {
+      clearTimeout(bufferTimeouts.get(userId));
+    }
+
+    // Se o assistente estiver pausado, apenas armazena a mensagem na thread, mas não gera resposta
+    if (message && isAssistantPaused(phone)) {
+      console.log(`Assistente pausado para ${phone}. Armazenando mensagem na thread sem gerar resposta.`);
+      
+      bufferTimeouts.set(userId, setTimeout(async () => {
+        try {
+          const bufferedMessages = messageBuffers.get(userId);
+          if (!bufferedMessages || bufferedMessages.length === 0) {
+            console.log(`Não há mensagens para armazenar para ${userId}`);
+            return;
+          }
+          
+          // Fazemos uma cópia e limpamos o buffer imediatamente
+          const messagesToProcess = [...bufferedMessages];
+          messageBuffers.delete(userId);
+          bufferTimeouts.delete(userId);
+          
+          console.log(`Armazenando ${messagesToProcess.length} mensagens para ${userId} (modo pausado)`);
+
+          const currentDate = moment().tz(config.timezone).format('DD/MM/YYYY');
+          const threadId = await redisClient.get(`threadId:${userId}`);
+
+          // Cria novo thread se necessário
+          if (threadId) {
+            // Processamos as mensagens bufferizadas apenas para armazená-las
+            let textMessages = [];
+            let imageProcessed = false;
+            
+            for (const item of messagesToProcess) {
+              if (item.type === 'text') {
+                let formattedMessage = item.content;
+                
+                if (item.meta.isAudioTranscription) {
+                  formattedMessage = `[Transcrição de áudio]: ${formattedMessage} [Data: ${currentDate}] [Phone: ${phone}]`;
+                } else {
+                  formattedMessage = `${formattedMessage} [Data: ${currentDate}] [Phone: ${phone}]`;
+                }
+                
+                textMessages.push(formattedMessage);
+                
+              } else if (item.type === 'image' && !imageProcessed) {
+                try {
+                  const description = await processImage(item.content);
+                  const instruction = `[Imagem] ${description} [Phone: ${phone}]`;
+                  
+                  await storeMessageInConversation(userId, threadId, {
+                    role: 'user',
+                    content: instruction,
+                    timestamp: Date.now()
+                  });
+                  
+                  // Para imagens, adicionamos imediatamente ao thread
+                  const addSuccess = await addMessageWithRetry(threadId, instruction);
+                  if (!addSuccess) {
+                    console.error(`Falha ao adicionar imagem ao thread ${threadId} (modo pausado)`);
+                  } else {
+                    imageProcessed = true;
+                  }
+                } catch (error) {
+                  console.error('Erro no processamento de imagem (modo pausado):', error);
+                }
+              }
+            }
+            
+            // Consolidamos todas as mensagens de texto em uma única, se houver várias
+            if (textMessages.length > 0) {
+              const consolidatedMessage = textMessages.join("\n\n");
+              console.log(`Mensagem consolidada para ${userId} (modo pausado): ${consolidatedMessage}`);
+              
+              await storeMessageInConversation(userId, threadId, {
+                role: 'user',
+                content: consolidatedMessage,
+                timestamp: Date.now()
+              });
+              
+              await addMessageWithRetry(threadId, consolidatedMessage);
+            }
+            
+            console.log(`Mensagens armazenadas com sucesso na thread ${threadId} (modo pausado)`);
+          } else {
+            // Se não existe thread, criamos uma nova
+            const greeting = getTimeBasedGreeting();
+            const initialMessage = `${greeting} [Data: ${currentDate}] [Phone: ${phone}]`;
+            const thread = await createThread(userId, initialMessage);
+            const newThreadId = thread.id;
+            
+            await redisClient.set(`threadId:${userId}`, newThreadId);
+            await storeMessageInConversation(userId, newThreadId, { 
+              role: 'user', 
+              content: initialMessage, 
+              timestamp: Date.now() 
+            });
+            
+            console.log(`Nova thread ${newThreadId} criada para ${userId} (modo pausado)`);
+            
+            // No caso de ser uma nova thread, já armazenamos a primeira mensagem acima
+          }
+        } catch (error) {
+          console.error('Erro ao armazenar mensagem no modo pausado:', error);
+        }
+      }, 1000)); // Delay reduzido para armazenar mais rapidamente, já que não vamos gerar resposta
+      
+      return { status: "assistant_paused_message_stored" };
     }
 
     // Verifica se o processamento está travado há muito tempo
@@ -186,17 +301,6 @@ export async function getChat(userId, phone, message, imageUrl, caption = '', is
         return { status: "queued" };
       }
     }
-
-    // Armazena mensagens no buffer com phone
-    messageBuffers.get(userId).push({
-      type: imageUrl ? 'image' : 'text',
-      content: imageUrl || message,
-      meta: { 
-        phone, 
-        caption,
-        isAudioTranscription
-      }
-    });
 
     // Reseta o timeout existente
     if (bufferTimeouts.has(userId)) {

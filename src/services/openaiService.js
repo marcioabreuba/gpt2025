@@ -29,7 +29,7 @@ export async function storeMessageInConversation(userId, threadId, message) {
   await redisClient.rPush(key, JSON.stringify(message));
 }
 
-export async function addMessageWithRetry(threadId, message, maxRetries = 3, initialDelay = 1000) {
+export async function addMessageWithRetry(threadId, message, role = "user", maxRetries = 3, initialDelay = 1000) {
   let retries = 0;
   let lastError = null;
   let delay = initialDelay;
@@ -37,11 +37,11 @@ export async function addMessageWithRetry(threadId, message, maxRetries = 3, ini
   while (retries < maxRetries) {
     try {
       await openai.beta.threads.messages.create(threadId, {
-        role: "user",
+        role: role,
         content: message
       });
       
-      console.log(`Mensagem adicionada ao thread ${threadId} na tentativa ${retries + 1}`);
+      console.log(`Mensagem (${role}) adicionada ao thread ${threadId} na tentativa ${retries + 1}`);
       return true;
     } catch (error) {
       retries++;
