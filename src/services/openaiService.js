@@ -44,7 +44,7 @@ export async function storeMessageInConversation(userId, threadId, message) {
     };
     
     // Adiciona a mensagem à lista de conversação
-    await redisClient.rpush(conversationKey, JSON.stringify(messageWithId));
+    await redisClient.rPush(conversationKey, JSON.stringify(messageWithId));
     
     // Se for uma mensagem enviada por um humano (Helena), marca a conversa para treinamento prioritário
     if (message.isHuman) {
