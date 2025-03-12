@@ -38,7 +38,6 @@ const {
     ordersLimit: ORDERS_LIMIT = 250,
     maxRetries: MAX_RETRIES = 3,
     initialBackoff: INITIAL_BACKOFF = 500,
-    accessToken: SHOPIFY_ACCESS_TOKEN,
   } = {},
 } = config;
 
@@ -221,7 +220,7 @@ export async function getOrderByNumber(endpoint, orderQuery, userPhone, userCpf 
       };
     }
 
-    const response = await axios.get(`https://6281d6-2.myshopify.com/admin/api/2024-10/orders/${prismaOrder.orderId}.json`, {
+    const response = await axios.get(`https://${shopConfig.shopDomain}/admin/api/2024-10/orders/${prismaOrder.orderId}.json`, {
       headers: {
         'X-Shopify-Access-Token': shopConfig.accessToken,
         'Accept-Encoding': 'gzip,deflate,compress'

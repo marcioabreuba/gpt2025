@@ -35,10 +35,7 @@ export default {
     loja3: {
       shopDomain: process.env.SHOPIFY_SHOP_DOMAIN_LOJA3,
       accessToken: process.env.SHOPIFY_ACCESS_TOKEN_LOJA3
-    },
-    // Mantida por compatibilidade com código existente - aponta para loja1
-    shopDomain: process.env.SHOPIFY_SHOP_DOMAIN_LOJA1,
-    accessToken: process.env.SHOPIFY_ACCESS_TOKEN_LOJA1
+    }
   },
 
   // Configuração do ZAPI

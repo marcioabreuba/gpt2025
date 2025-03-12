@@ -37,7 +37,7 @@ export async function getProductsByCategory(category, instanceId) {
       title: product.title,
       description: product.body_html.replace(/<[^>]*>/g, ''), // remove HTML
       price: product.variants[0]?.price || '',
-      url: `https://www.tropicalize.com.br/products/${product.handle}`,
+      url: `https://${shopConfig.shopDomain}/products/${product.handle}`,
       image: product.images[0]?.src || '',
       shopName: shopConfig.name // Adiciona o nome da loja para referência
     }));
