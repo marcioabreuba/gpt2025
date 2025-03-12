@@ -4,6 +4,7 @@ import { getChat } from '../services/conversationService.js';
 import { processAudioMessage } from '../services/audioService.js';
 // import { sendAudioReceiptConfirmation } from '../services/zapiService.js';
 import logger from '../utils/logger.js';
+import { handleAssistantCommand } from '../services/assistantController.js';
 
 const router = express.Router();
 
@@ -17,6 +18,20 @@ router.post("/webhook", async (req, res, next) => {
     console.log("Webhook recebido", req.body);
     
     const { type, fromMe, chatLid, text, phone, audio, image } = req.body;
+    
+    // Tratamento para mensagens enviadas pelo próprio número da IA (Helena)
+    if (type === "ReceivedCallback" && fromMe === true && phone && text?.message) {
+      const message = text.message || "";
+      console.log(`Mensagem da IA (próprio número): ${message}`);
+      
+      // Verifica se é um comando de controle da assistente
+      const commandResult = await handleAssistantCommand(phone, message);
+      if (commandResult.handled) {
+        console.log(`Comando processado: ${commandResult.status}`);
+        res.sendStatus(200);
+        return;
+      }
+    }
     
     if (type === "ReceivedCallback" && fromMe === false && phone) {
       // Verificar se é uma imagem

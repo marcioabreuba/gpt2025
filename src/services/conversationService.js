@@ -16,6 +16,7 @@ import { sendReplyZAPI } from './zapiService.js';
 import OpenAI from 'openai';
 import logger from '../utils/logger.js';
 import cleanCitations from '../utils/cleanCitations.js';
+import { isAssistantPaused } from './assistantController.js';
 
 const openai = new OpenAI({ apiKey: config.openai.apiKey });
 const messageBuffers = new Map();
@@ -141,6 +142,12 @@ export async function getChat(userId, phone, message, imageUrl, caption = '', is
         await handleDeleteThread(userId);
         await sendReplyZAPI(phone, "Histórico resetado com sucesso! 😊");
         return { status: "thread_deleted" };
+      }
+      
+      // Se o assistente estiver pausado, não processa a mensagem
+      if (isAssistantPaused(phone)) {
+        console.log(`Assistente pausado para ${phone}. Mensagem não será processada pelo bot.`);
+        return { status: "assistant_paused" };
       }
     }
 
