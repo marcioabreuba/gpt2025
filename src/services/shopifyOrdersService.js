@@ -12,7 +12,6 @@ import config from '../config.js';
 import redisClient from '../redisClient.js';
 import winston from 'winston';
 import { findOrderByUser } from './prismaOrdersService.js';
-import { getShopifyConfigByInstanceId } from '../utils/shopInstanceResolver.js';
 
 // Configuração do logger com Winston, incluindo timestamp e stack trace
 const logger = winston.createLogger({

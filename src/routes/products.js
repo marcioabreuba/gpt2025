@@ -28,18 +28,18 @@ router.post("/get_products_info", async (req, res, next) => {
 /**
  * Endpoint para buscar produtos por categoria
  * Exemplo de uso:
- *   GET /products?category=roupas&instanceId=ID_DA_INSTANCIA_ZAPI
+ *   GET /products?category=roupas
  */
 router.get('/products', async (req, res) => {
   try {
-    const { category, instanceId } = req.query;
+    const { category } = req.query;
     
     if (!category) {
       return res.status(400).json({ error: "Categoria é obrigatória" });
     }
     
-    // Busca produtos passando o instanceId para determinar qual loja usar
-    const products = await getProductsByCategory(category, instanceId);
+    // Busca produtos usando a categoria
+    const products = await getProductsByCategory(category);
     
     if (!products || products.length === 0) {
       return res.json({ 

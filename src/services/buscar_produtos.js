@@ -1,21 +1,10 @@
 import Shopify from 'shopify-api-node';
 import config from '../config.js';
-import { getShopifyConfigByInstanceId } from '../utils/shopInstanceResolver.js';
 
 const shopify = new Shopify({
   shopName: config.shopify.shopDomain,
   accessToken: config.shopify.accessToken
 });
-
-// Função para criar uma instância do Shopify com base no instanceId
-const createShopifyClient = async (instanceId) => {
-  const shopConfig = await getShopifyConfigByInstanceId(instanceId);
-  
-  return new Shopify({
-    shopName: shopConfig.shopDomain,
-    accessToken: shopConfig.accessToken
-  });
-};
 
 // Função para buscar todos os produtos com paginação
 export const buscarTodosProdutos = async () => {
