@@ -6,11 +6,14 @@
   "main": "src/index.js",
   "scripts": {
     "start": "node start.js",
+    "dev": "nodemon start.js",
     "start:old": "node src/index.js",
     "start:no-warnings": "node --no-warnings src/index.js",
     "check:assistant": "node src/scripts/checkAssistantConfig.js",
     "init:vector-store": "node src/scripts/initVectorStore.js",
+    "migrate": "npx prisma migrate dev",
     "migrate:pinecone": "node src/scripts/migratePineconeToOpenAI.js",
+    "migrate:multi-shop": "node src/scripts/migrateShopInstances.js",
     "sync:pedidos": "curl -X POST http://localhost:3000/api/pedidos",
     "sync:test": "node src/scripts/testSyncOrders.js"
   },

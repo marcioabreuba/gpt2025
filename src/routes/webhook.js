@@ -20,7 +20,7 @@ router.post("/webhook", async (req, res, next) => {
     // Loga o payload recebido do webhook
     console.log("Webhook recebido", req.body);
     
-    const { type, fromMe, chatLid, text, phone, audio, image } = req.body;
+    const { type, fromMe, chatLid, text, phone, audio, image, instanceId } = req.body;
     
     // Se recebemos uma mensagem de usuário com chatLid, armazenamos para referência futura
     if (type === "ReceivedCallback" && !fromMe && phone && chatLid) {
@@ -62,7 +62,7 @@ router.post("/webhook", async (req, res, next) => {
         }
         
         // Processar imagem com legenda (se houver)
-        await getChat(chatLid, phone, null, image.imageUrl, caption);
+        await getChat(chatLid, phone, null, image.imageUrl, caption, false, instanceId);
       }
       // Verificar se é uma mensagem de áudio
       else if (audio?.audioUrl) {
@@ -76,7 +76,7 @@ router.post("/webhook", async (req, res, next) => {
         const message = text.message || "";
         console.log(`Usuário ${phone}: ${message}`);
         
-        await getChat(chatLid, phone, message);
+        await getChat(chatLid, phone, message, null, null, false, instanceId);
       }
     }
     

@@ -5,23 +5,32 @@ import pineconeSearch from './BuscaPinecone.js';
 import embeddingText from './embeddingText.js';
 import Shopify from 'shopify-api-node';
 import logger from '../utils/logger.js';
+import { getShopifyConfigByInstanceId } from '../utils/shopInstanceResolver.js';
 
-const shopify = new Shopify({
-  shopName: config.shopify.shopDomain,
-  accessToken: config.shopify.accessToken
-});
+// Função para criar uma instância do Shopify com base no instanceId
+const createShopifyClient = async (instanceId) => {
+  const shopConfig = await getShopifyConfigByInstanceId(instanceId);
+  
+  return new Shopify({
+    shopName: shopConfig.shopDomain,
+    accessToken: shopConfig.accessToken
+  });
+};
 
 /**
  * Obtém os IDs das coleções do Shopify.
+ * @param {string} instanceId - ID da instância do ZAPI (opcional)
  * @returns {Array} - Lista de IDs das coleções.
  */
-export async function getCollectionIds() {
-  const url = `https://${config.shopify.shopDomain}/admin/api/2024-10/custom_collections.json`;
+export async function getCollectionIds(instanceId) {
+  const shopConfig = await getShopifyConfigByInstanceId(instanceId);
+  
+  const url = `https://${shopConfig.shopDomain}/admin/api/2024-10/custom_collections.json`;
   const response = await fetch(url, {
     method: 'GET',
     headers: {
       'Content-Type': 'application/json',
-      'X-Shopify-Access-Token': config.shopify.accessToken
+      'X-Shopify-Access-Token': shopConfig.accessToken
     }
   });
 
@@ -39,12 +48,15 @@ export async function getCollectionIds() {
  * Cada produto recebe um 'public_url' amigável e são removidos campos indesejados.
  *
  * @param {string} collectionId - ID da coleção.
+ * @param {string} instanceId - ID da instância do ZAPI (opcional)
  * @returns {Array} - Lista de produtos com detalhes e 'public_url'.
  */
-export async function getProductsByCollectionId(collectionId) {
+export async function getProductsByCollectionId(collectionId, instanceId) {
   let allProducts = [];
   let nextUrl = null;
-  const baseUrl = `https://${config.shopify.shopDomain}/admin/api/2024-10/collections/${collectionId}/products.json`;
+  
+  const shopConfig = await getShopifyConfigByInstanceId(instanceId);
+  const baseUrl = `https://${shopConfig.shopDomain}/admin/api/2024-10/collections/${collectionId}/products.json`;
 
   do {
     let currentUrl;
@@ -60,7 +72,7 @@ export async function getProductsByCollectionId(collectionId) {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
-        'X-Shopify-Access-Token': config.shopify.accessToken
+        'X-Shopify-Access-Token': shopConfig.accessToken
       }
     });
 
@@ -100,13 +112,14 @@ export async function getProductsByCollectionId(collectionId) {
         sku: variant.sku,
         inventoryItemId: variant.inventory_item_id
       }))
-      : []
+      : [],
+    shopName: shopConfig.name // Adiciona o nome da loja para referência
   }));
 
   return productsWithInventory;
 }
 
-export async function buscarProdutoPorId(productId) {
+export async function buscarProdutoPorId(productId, instanceId) {
   try {
     if (!productId) {
       logger.warn("ProductId não fornecido");
@@ -114,6 +127,11 @@ export async function buscarProdutoPorId(productId) {
     }
 
     logger.debug(`Buscando produto com ID: ${productId}`);
+    
+    // Cria uma instância do cliente Shopify com base no instanceId
+    const shopify = await createShopifyClient(instanceId);
+    const shopConfig = await getShopifyConfigByInstanceId(instanceId);
+    
     const productItem = await shopify.product.get(productId);
 
     return {
@@ -121,12 +139,13 @@ export async function buscarProdutoPorId(productId) {
       title: productItem.title,
       price: productItem.variants[0].price,
       description: productItem.body_html,
+      shopName: shopConfig.name // Adiciona o nome da loja para referência
     }
   } catch (error) {
     logger.error(`Erro ao buscar produto com ID ${productId}:`, { error: error.message, stack: error.stack });
     return null;
   }
-};
+}
 
 export async function get_products_info(nomes_produtos) {
   try {

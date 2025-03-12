@@ -89,7 +89,8 @@ function processNextPendingMessage(phone) {
         nextMessage.message, 
         nextMessage.imageUrl, 
         nextMessage.caption, 
-        nextMessage.isAudioTranscription
+        nextMessage.isAudioTranscription,
+        nextMessage.instanceId
       );
     }, 500); // Pequeno delay para garantir que o estado seja limpo corretamente
     
@@ -116,7 +117,18 @@ setInterval(() => {
   }
 }, 30 * 1000); // 30 segundos
 
-export async function getChat(userId, phone, message, imageUrl, caption = '', isAudioTranscription = false) {
+/**
+ * Processa mensagens do usuário e retorna respostas do assistente.
+ * @param {string} userId - ID do usuário/chat.
+ * @param {string} phone - Número de telefone do usuário.
+ * @param {string} message - Mensagem de texto do usuário.
+ * @param {string} imageUrl - URL da imagem enviada pelo usuário.
+ * @param {string} caption - Legenda da imagem.
+ * @param {boolean} isAudioTranscription - Indica se a mensagem é uma transcrição de áudio.
+ * @param {string} instanceId - ID da instância do ZAPI (opcional).
+ * @returns {Promise<Object>} - Status do processamento.
+ */
+export async function getChat(userId, phone, message, imageUrl, caption = '', isAudioTranscription = false, instanceId = null) {
   try {
     // A mensagem já é registrada no webhook, não precisamos registrar novamente aqui
     // Removendo para evitar duplicação
@@ -162,7 +174,8 @@ export async function getChat(userId, phone, message, imageUrl, caption = '', is
       meta: { 
         phone, 
         caption,
-        isAudioTranscription
+        isAudioTranscription,
+        instanceId
       }
     });
 
@@ -299,6 +312,7 @@ export async function getChat(userId, phone, message, imageUrl, caption = '', is
           imageUrl,
           caption,
           isAudioTranscription,
+          instanceId,
           timestamp: Date.now()
         });
         
@@ -338,6 +352,7 @@ export async function getChat(userId, phone, message, imageUrl, caption = '', is
             imageUrl: bufferedMessages.find(m => m.type === 'image')?.content || null,
             caption: bufferedMessages.find(m => m.type === 'image')?.meta.caption || '',
             isAudioTranscription: false,
+            instanceId: bufferedMessages.find(m => m.type === 'image')?.meta.instanceId || null,
             timestamp: Date.now()
           });
           

@@ -27,3 +27,12 @@ model QueueTraining {
   updatedAt DateTime @default(now()) @updatedAt
   createdAt DateTime @default(now())
 }
+
+model ShopInstances {
+  id          Int      @id @default(autoincrement())
+  instanceId  String   @unique // ID da instância do ZAPI
+  shopKey     String   // Chave da loja no config.js
+  name        String   // Nome da loja para exibição
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @default(now()) @updatedAt
+}
