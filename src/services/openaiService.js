@@ -10,8 +10,6 @@ const openai = new OpenAI({
   apiKey: config.openai.apiKey
 });
 
-const TRAINING_DATA_KEY_PREFIX = 'training_priority:';
-
 // Exportação correta de todas as funções
 export function getTimeBasedGreeting() {
   const now = moment().tz("America/Sao_Paulo");
@@ -26,36 +24,9 @@ export async function createThread(userId, content) {
   return thread;
 }
 
-/**
- * Armazena uma mensagem no histórico de conversação no Redis.
- * @param {string} userId - ID do usuário.
- * @param {string} threadId - ID do thread de conversa.
- * @param {object} message - Objeto de mensagem com role, content e timestamp.
- */
 export async function storeMessageInConversation(userId, threadId, message) {
-  try {
-    if (!userId || !threadId || !message) return;
-    
-    const conversationKey = `conversation:${userId}`;
-    const messageWithId = {
-      ...message,
-      id: `msg_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
-      threadId
-    };
-    
-    // Adiciona a mensagem à lista de conversação
-    await redisClient.rPush(conversationKey, JSON.stringify(messageWithId));
-    
-    // Se for uma mensagem enviada por um humano (Helena), marca a conversa para treinamento prioritário
-    if (message.isHuman) {
-      await redisClient.set(`${TRAINING_DATA_KEY_PREFIX}${threadId}`, 'true');
-      console.log(`Thread ${threadId} marcado para treinamento prioritário (intervenção humana)`);
-    }
-    
-    return messageWithId;
-  } catch (error) {
-    console.error('Erro ao armazenar mensagem na conversação:', error);
-  }
+  const key = `conversation:${userId}:${threadId}`;
+  await redisClient.rPush(key, JSON.stringify(message));
 }
 
 export async function addMessageWithRetry(threadId, message, maxRetries = 3, initialDelay = 1000) {
