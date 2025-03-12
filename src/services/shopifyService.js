@@ -5,32 +5,23 @@ import pineconeSearch from './BuscaPinecone.js';
 import embeddingText from './embeddingText.js';
 import Shopify from 'shopify-api-node';
 import logger from '../utils/logger.js';
-import { getShopifyConfigByInstanceId } from '../utils/shopInstanceResolver.js';
 
-// Função para criar uma instância do Shopify com base no instanceId
-const createShopifyClient = async (instanceId) => {
-  const shopConfig = await getShopifyConfigByInstanceId(instanceId);
-  
-  return new Shopify({
-    shopName: shopConfig.shopDomain,
-    accessToken: shopConfig.accessToken
-  });
-};
+const shopify = new Shopify({
+  shopName: config.shopify.shopDomain,
+  accessToken: config.shopify.accessToken
+});
 
 /**
  * Obtém os IDs das coleções do Shopify.
- * @param {string} instanceId - ID da instância do ZAPI (opcional)
  * @returns {Array} - Lista de IDs das coleções.
  */
-export async function getCollectionIds(instanceId) {
-  const shopConfig = await getShopifyConfigByInstanceId(instanceId);
-  
-  const url = `https://${shopConfig.shopDomain}/admin/api/2024-10/custom_collections.json`;
+export async function getCollectionIds() {
+  const url = `https://${config.shopify.shopDomain}/admin/api/2024-10/custom_collections.json`;
   const response = await fetch(url, {
     method: 'GET',
     headers: {
       'Content-Type': 'application/json',
-      'X-Shopify-Access-Token': shopConfig.accessToken
+      'X-Shopify-Access-Token': config.shopify.accessToken
     }
   });
 
@@ -48,15 +39,12 @@ export async function getCollectionIds(instanceId) {
  * Cada produto recebe um 'public_url' amigável e são removidos campos indesejados.
  *
  * @param {string} collectionId - ID da coleção.
- * @param {string} instanceId - ID da instância do ZAPI (opcional)
  * @returns {Array} - Lista de produtos com detalhes e 'public_url'.
  */
-export async function getProductsByCollectionId(collectionId, instanceId) {
+export async function getProductsByCollectionId(collectionId) {
   let allProducts = [];
   let nextUrl = null;
-  
-  const shopConfig = await getShopifyConfigByInstanceId(instanceId);
-  const baseUrl = `https://${shopConfig.shopDomain}/admin/api/2024-10/collections/${collectionId}/products.json`;
+  const baseUrl = `https://${config.shopify.shopDomain}/admin/api/2024-10/collections/${collectionId}/products.json`;
 
   do {
     let currentUrl;
@@ -72,7 +60,7 @@ export async function getProductsByCollectionId(collectionId, instanceId) {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
-        'X-Shopify-Access-Token': shopConfig.accessToken
+        'X-Shopify-Access-Token': config.shopify.accessToken
       }
     });
 
@@ -103,7 +91,7 @@ export async function getProductsByCollectionId(collectionId, instanceId) {
   const productsWithInventory = allProducts.map(product => ({
     title: product.title,
     handle: product.handle,
-    public_url: `https://${shopConfig.shopDomain}/products/${product.handle}`,
+    public_url: `https://www.tropicalize.com.br/products/${product.handle}`,
     variants: product.variants
       ? product.variants.map(variant => ({
         id: variant.id,
@@ -112,14 +100,13 @@ export async function getProductsByCollectionId(collectionId, instanceId) {
         sku: variant.sku,
         inventoryItemId: variant.inventory_item_id
       }))
-      : [],
-    shopName: shopConfig.name // Adiciona o nome da loja para referência
+      : []
   }));
 
   return productsWithInventory;
 }
 
-export async function buscarProdutoPorId(productId, instanceId) {
+export async function buscarProdutoPorId(productId) {
   try {
     if (!productId) {
       logger.warn("ProductId não fornecido");
@@ -127,19 +114,13 @@ export async function buscarProdutoPorId(productId, instanceId) {
     }
 
     logger.debug(`Buscando produto com ID: ${productId}`);
-    
-    // Cria uma instância do cliente Shopify com base no instanceId
-    const shopify = await createShopifyClient(instanceId);
-    const shopConfig = await getShopifyConfigByInstanceId(instanceId);
-    
     const productItem = await shopify.product.get(productId);
 
     return {
-      public_url: `https://${shopConfig.shopDomain}/products/${productItem.handle}`,
+      public_url: `https://www.tropicalize.com.br/products/${productItem.handle}`,
       title: productItem.title,
       price: productItem.variants[0].price,
       description: productItem.body_html,
-      shopName: shopConfig.name // Adiciona o nome da loja para referência
     }
   } catch (error) {
     logger.error(`Erro ao buscar produto com ID ${productId}:`, { error: error.message, stack: error.stack });

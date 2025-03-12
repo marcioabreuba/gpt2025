@@ -11,20 +11,18 @@ const router = express.Router();
  *   POST /get_orders_info
  *   Body:
  *     {
- *       "endpoint": "https://sualoja.myshopify.com/admin/api/2024-10/orders.json",
- *       "instanceId": "ID_DA_INSTANCIA_ZAPI" // opcional
+ *       "endpoint": "https://sualoja.myshopify.com/admin/api/2024-10/orders.json"
  *     }
  */
 router.post('/get_orders_info', async (req, res) => {
   try {
-    const { endpoint, instanceId } = req.body;
+    const { endpoint } = req.body;
     if (!endpoint) {
       return res.status(400).json({ error: "Falta endpoint" });
     }
 
     // Busca os pedidos utilizando a função do serviço do Shopify
-    // Passa o instanceId para determinar qual loja usar
-    const ordersData = await getOrdersInfo(endpoint, instanceId);
+    const ordersData = await getOrdersInfo(endpoint);
     return res.json(ordersData);
 
   } catch (error) {

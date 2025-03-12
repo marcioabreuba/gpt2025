@@ -42,7 +42,6 @@ import ordersRoutes from './routes/orders.js';
 import pedidosRoutes from './routes/api/pedidos.js';
 import produtosRoutes from './routes/api/produtos.js';
 import trueRoutes from './routes/api/true.js';
-import shopsRoutes from './routes/api/shops.js';
 
 // Inicialização do Express
 const app = express();
@@ -80,7 +79,6 @@ async function startServer() {
   app.use('/api', pedidosRoutes);
   app.use('/api', produtosRoutes);
   app.use('/api', trueRoutes);
-  app.use('/api/shops', shopsRoutes);
   
   // Endpoint de emergência para reset do estado de processamento
   app.post('/api/reset', (req, res) => {

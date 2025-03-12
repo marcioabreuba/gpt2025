@@ -1,24 +1,19 @@
 import config from '../config.js';
 import axios from 'axios';
-import { getShopifyConfigByInstanceId } from '../utils/shopInstanceResolver.js';
 
 /**
  * Busca produtos por categoria na loja Shopify
  * @param {string} category - Categoria de produtos a buscar
- * @param {string} instanceId - ID da instância do ZAPI (opcional)
  * @returns {Promise<Array>} - Lista de produtos simplificada
  */
-export async function getProductsByCategory(category, instanceId) {
+export async function getProductsByCategory(category) {
   try {
-    // Obtém a configuração da loja com base no instanceId
-    const shopConfig = await getShopifyConfigByInstanceId(instanceId);
-    
-    const shopifyUrl = `https://${shopConfig.shopDomain}/admin/api/2024-10/products.json`;
+    const shopifyUrl = `https://${config.shopify.shopDomain}/admin/api/2024-10/products.json`;
     
     // Buscar produtos - pode precisar adicionar filtros apropriados
     const response = await axios.get(shopifyUrl, {
       headers: {
-        'X-Shopify-Access-Token': shopConfig.accessToken,
+        'X-Shopify-Access-Token': config.shopify.accessToken,
         'Content-Type': 'application/json'
       }
     });
@@ -37,9 +32,8 @@ export async function getProductsByCategory(category, instanceId) {
       title: product.title,
       description: product.body_html.replace(/<[^>]*>/g, ''), // remove HTML
       price: product.variants[0]?.price || '',
-      url: `https://${shopConfig.shopDomain}/products/${product.handle}`,
-      image: product.images[0]?.src || '',
-      shopName: shopConfig.name // Adiciona o nome da loja para referência
+      url: `https://www.tropicalize.com.br/products/${product.handle}`,
+      image: product.images[0]?.src || ''
     }));
     
   } catch (error) {

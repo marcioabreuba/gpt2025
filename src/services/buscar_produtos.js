@@ -2,6 +2,11 @@ import Shopify from 'shopify-api-node';
 import config from '../config.js';
 import { getShopifyConfigByInstanceId } from '../utils/shopInstanceResolver.js';
 
+const shopify = new Shopify({
+  shopName: config.shopify.shopDomain,
+  accessToken: config.shopify.accessToken
+});
+
 // Função para criar uma instância do Shopify com base no instanceId
 const createShopifyClient = async (instanceId) => {
   const shopConfig = await getShopifyConfigByInstanceId(instanceId);
@@ -13,12 +18,8 @@ const createShopifyClient = async (instanceId) => {
 };
 
 // Função para buscar todos os produtos com paginação
-export const buscarTodosProdutos = async (instanceId) => {
+export const buscarTodosProdutos = async () => {
   try {
-    // Cria uma instância do cliente Shopify com base no instanceId
-    const shopify = await createShopifyClient(instanceId);
-    const shopConfig = await getShopifyConfigByInstanceId(instanceId);
-    
     let allProducts = [];
     let params = { limit: 250 }; // O máximo permitido pela API é 250
     
@@ -38,18 +39,10 @@ export const buscarTodosProdutos = async (instanceId) => {
         params.since_id = products[products.length - 1].id;
       }
       
-      console.log(`Carregados ${allProducts.length} produtos até agora da loja ${shopConfig.name}...`);
+      console.log(`Carregados ${allProducts.length} produtos até agora...`);
     }
     
-    console.log(`Total de produtos carregados da loja ${shopConfig.name}: ${allProducts.length}`);
-    
-    // Adiciona informação da loja aos produtos
-    allProducts = allProducts.map(product => ({
-      ...product,
-      shopName: shopConfig.name,
-      shopKey: shopConfig.shopKey
-    }));
-    
+    console.log(`Total de produtos carregados: ${allProducts.length}`);
     return allProducts;
   } catch (error) {
     console.error('Erro ao buscar produtos:', error);

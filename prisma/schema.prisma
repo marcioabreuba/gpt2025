@@ -19,20 +19,11 @@ model Orders {
 
 model QueueTraining {
   id        String   @id @default(uuid())
-  status    Boolean  @default(false) // true se subiu no pinecone ou false se não.
+  status    Boolean  @default(false) // true se subiu no pinecone ou false se não.
   type      String // image ou text
   productId BigInt // id do produto 
-  content   String // nome do produto, link do produto ou descrição
+  content   String // nome do produto, link do produto ou descrição
   metadata  Json? // para as imagens vai armazenar os variantIds
   updatedAt DateTime @default(now()) @updatedAt
   createdAt DateTime @default(now())
-}
-
-model ShopInstances {
-  id          Int      @id @default(autoincrement())
-  instanceId  String   @unique // ID da instância do ZAPI
-  shopKey     String   // Chave da loja no config.js
-  name        String   // Nome da loja para exibição
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @default(now()) @updatedAt
 }

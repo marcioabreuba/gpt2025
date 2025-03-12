@@ -23,19 +23,8 @@ export default {
 
   // Configuração da Shopify
   shopify: {
-    // Configuração para múltiplas lojas
-    loja1: {
-      shopDomain: process.env.SHOPIFY_SHOP_DOMAIN_LOJA1,
-      accessToken: process.env.SHOPIFY_ACCESS_TOKEN_LOJA1
-    },
-    loja2: {
-      shopDomain: process.env.SHOPIFY_SHOP_DOMAIN_LOJA2,
-      accessToken: process.env.SHOPIFY_ACCESS_TOKEN_LOJA2
-    },
-    loja3: {
-      shopDomain: process.env.SHOPIFY_SHOP_DOMAIN_LOJA3,
-      accessToken: process.env.SHOPIFY_ACCESS_TOKEN_LOJA3
-    }
+    shopDomain: process.env.SHOPIFY_SHOP_DOMAIN,
+    accessToken: process.env.SHOPIFY_ACCESS_TOKEN
   },
 
   // Configuração do ZAPI

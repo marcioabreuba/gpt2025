@@ -38,6 +38,7 @@ const {
     ordersLimit: ORDERS_LIMIT = 250,
     maxRetries: MAX_RETRIES = 3,
     initialBackoff: INITIAL_BACKOFF = 500,
+    accessToken: SHOPIFY_ACCESS_TOKEN,
   } = {},
 } = config;
 
@@ -47,16 +48,14 @@ const HTTP_STATUS_NOT_FOUND = 404;
 const HTTP_STATUS_SERVER_ERROR = 500;
 const DEFAULT_REQUEST_TIMEOUT = 10000;
 
-// Função para criar uma instância do Axios com as credenciais corretas
-const createAxiosInstance = (accessToken) => {
-  return axios.create({
-    timeout: DEFAULT_REQUEST_TIMEOUT,
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Shopify-Access-Token': accessToken,
-    },
-  });
-};
+// Instância do Axios configurada
+const axiosInstance = axios.create({
+  timeout: DEFAULT_REQUEST_TIMEOUT,
+  headers: {
+    'Content-Type': 'application/json',
+    'X-Shopify-Access-Token': SHOPIFY_ACCESS_TOKEN,
+  },
+});
 
 // Helpers
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -82,10 +81,9 @@ const calculateBackoff = (base, attempt) => {
 };
 
 // Funções principais
-const fetchOrdersPage = async (url, accessToken, retries = MAX_RETRIES, attempt = 0) => {
+const fetchOrdersPage = async (url, retries = MAX_RETRIES, attempt = 0) => {
   try {
     logger.debug(`Buscando pedidos na URL: ${url.toString()}`);
-    const axiosInstance = createAxiosInstance(accessToken);
     const response = await axiosInstance.get(url.toString());
     return response;
   } catch (error) {
@@ -98,7 +96,7 @@ const fetchOrdersPage = async (url, accessToken, retries = MAX_RETRIES, attempt 
       const backoffTime = calculateBackoff(INITIAL_BACKOFF, attempt);
       logger.warn(`Erro ao buscar pedidos: ${error.message}. Tentando novamente em ${backoffTime.toFixed(0)}ms. Tentativas restantes: ${retries}`, { stack: error.stack });
       await sleep(backoffTime);
-      return fetchOrdersPage(url, accessToken, retries - 1, attempt + 1);
+      return fetchOrdersPage(url, retries - 1, attempt + 1);
     }
     logger.error(`Falha ao buscar pedidos do Shopify: ${error.message}`, { error, stack: error.stack });
     throw new Error(`Não foi possível obter os pedidos do Shopify: ${error.message}`);
@@ -116,9 +114,9 @@ const processOrdersWithTracking = (orders = []) => {
   }));
 };
 
-const setOrdersCache = async (orders, cacheKey) => {
+const setOrdersCache = async (orders) => {
   try {
-    await redisClient.set(cacheKey, JSON.stringify(orders), 'EX', CACHE_TTL_SECONDS);
+    await redisClient.set(ORDERS_CACHE_KEY, JSON.stringify(orders), 'EX', CACHE_TTL_SECONDS);
     logger.debug(`Cache atualizado com ${orders.length} pedidos`);
   } catch (error) {
     logger.warn(`Erro ao armazenar pedidos no cache Redis: ${error.message}`, { stack: error.stack });
@@ -129,69 +127,47 @@ const setOrdersCache = async (orders, cacheKey) => {
 /**
  * Busca informações de pedidos da API do Shopify.
  * @param {string} endpoint - URL da API do Shopify para buscar pedidos.
- * @param {string} instanceId - ID da instância do ZAPI (opcional).
  * @returns {Promise<Object>} - Objeto com informações dos pedidos.
  */
-export async function getOrdersInfo(endpoint, instanceId) {
-  try {
-    // Obtém a configuração da loja com base no instanceId
-    const shopConfig = await getShopifyConfigByInstanceId(instanceId);
-    
-    if (!isValidUrl(endpoint)) {
-      throw new Error('URL de endpoint inválida');
-    }
-
-    // Tenta obter do cache primeiro
-    const cacheKey = `${ORDERS_CACHE_KEY}:${shopConfig.shopKey}`;
-    const cachedOrders = await redisClient.get(cacheKey);
-    if (cachedOrders) {
-      logger.info(`Usando dados em cache para ${shopConfig.shopKey}`);
-      return JSON.parse(cachedOrders);
-    }
-
-    // Se não estiver em cache, busca da API
-    logger.info(`Buscando pedidos da API para ${shopConfig.shopKey}`);
-    let allOrders = [];
-    let nextUrl = new URL(endpoint);
-    nextUrl.searchParams.set('limit', ORDERS_LIMIT.toString());
-
-    // Busca a primeira página
-    let response = await fetchOrdersPage(nextUrl, shopConfig.accessToken);
-    if (!response) {
-      throw new Error('Falha ao buscar pedidos do Shopify');
-    }
-
-    // Adiciona os pedidos da primeira página
-    allOrders = allOrders.concat(response.data.orders || []);
-
-    // Busca páginas adicionais se houver
-    const linkHeader = response.headers.link;
-    nextUrl = linkHeader ? extractNextUrl(linkHeader) : null;
-
-    while (nextUrl) {
-      response = await fetchOrdersPage(nextUrl, shopConfig.accessToken);
-      if (!response) break;
-
-      allOrders = allOrders.concat(response.data.orders || []);
-      const linkHeader = response.headers.link;
-      nextUrl = linkHeader ? extractNextUrl(linkHeader) : null;
-    }
-
-    // Processa os pedidos para adicionar informações de rastreamento
-    const processedOrders = processOrdersWithTracking(allOrders);
-
-    // Armazena no cache
-    await setOrdersCache(processedOrders, cacheKey);
-
-    return {
-      orders: processedOrders,
-      count: processedOrders.length,
-      shopName: shopConfig.name
-    };
-  } catch (error) {
-    logger.error('Erro ao buscar pedidos:', error);
-    throw error;
+export async function getOrdersInfo(endpoint) {
+  if (!isValidUrl(endpoint)) {
+    logger.error('Endpoint inválido fornecido.');
+    throw new Error('Endpoint inválido.');
   }
+
+  let cachedOrders;
+  try {
+    const cachedData = await redisClient.get(ORDERS_CACHE_KEY);
+    cachedOrders = cachedData ? JSON.parse(cachedData) : null;
+  } catch (error) {
+    logger.warn(`Erro no cache Redis: ${error.message}`, { stack: error.stack });
+  }
+
+  if (Array.isArray(cachedOrders)) {
+    logger.info(`Retornando ${cachedOrders.length} pedidos do cache`);
+    return { orders: cachedOrders };
+  }
+
+  let allOrders = [];
+  let nextUrl = null;
+  const baseUrl = new URL(endpoint);
+  baseUrl.searchParams.set('limit', ORDERS_LIMIT);
+  baseUrl.searchParams.set('status', 'any');
+
+  do {
+    const currentUrl = nextUrl ? new URL(nextUrl) : baseUrl;
+    const response = await fetchOrdersPage(currentUrl);
+    
+    if (response) {
+      const ordersFromResponse = response.data?.orders || [];
+      allOrders = allOrders.concat(ordersFromResponse);
+      nextUrl = extractNextUrl(response.headers.link);
+    }
+  } while (nextUrl);
+
+  const processedOrders = processOrdersWithTracking(allOrders);
+  await setOrdersCache(processedOrders);
+  return { orders: processedOrders };
 }
 
 /**
@@ -200,14 +176,10 @@ export async function getOrdersInfo(endpoint, instanceId) {
  * @param {string} orderQuery - Número ou nome do pedido a buscar.
  * @param {string} userPhone - Telefone do usuário.
  * @param {string} userCpf - CPF do usuário (opcional).
- * @param {string} instanceId - ID da instância do ZAPI (opcional).
  * @returns {Promise<Object>} - Objeto com informações do pedido encontrado.
  */
-export async function getOrderByNumber(endpoint, orderQuery, userPhone, userCpf = null, instanceId) {
+export async function getOrderByNumber(endpoint, orderQuery, userPhone, userCpf = null) {
   try {
-    // Obtém a configuração da loja com base no instanceId
-    const shopConfig = await getShopifyConfigByInstanceId(instanceId);
-    
     // 1. Busca no Prisma seguindo a nova ordem de prioridade (sem telefone)
     const prismaOrder = await findOrderByUser(null, orderQuery, userCpf);
     console.log('Prisma Order:', prismaOrder);
@@ -220,9 +192,9 @@ export async function getOrderByNumber(endpoint, orderQuery, userPhone, userCpf 
       };
     }
 
-    const response = await axios.get(`https://${shopConfig.shopDomain}/admin/api/2024-10/orders/${prismaOrder.orderId}.json`, {
+    const response = await axios.get(`https://6281d6-2.myshopify.com/admin/api/2024-10/orders/${prismaOrder.orderId}.json`, {
       headers: {
-        'X-Shopify-Access-Token': shopConfig.accessToken,
+        'X-Shopify-Access-Token': config.shopify.accessToken,
         'Accept-Encoding': 'gzip,deflate,compress'
       },
       timeout: 15000

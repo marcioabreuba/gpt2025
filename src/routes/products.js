@@ -55,4 +55,25 @@ router.get('/products', async (req, res) => {
   }
 });
 
+router.get('/api/collections', async (req, res) => {
+  try {
+    const collectionIds = await getCollectionIds();
+    res.json({ collectionIds });
+  } catch (error) {
+    console.error("Erro ao buscar coleções:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.get('/api/collections/:id/products', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const products = await getProductsByCollectionId(id);
+    res.json({ products });
+  } catch (error) {
+    console.error("Erro ao buscar produtos da coleção:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 export default router;

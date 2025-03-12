@@ -13,7 +13,6 @@
     "init:vector-store": "node src/scripts/initVectorStore.js",
     "migrate": "npx prisma migrate dev",
     "migrate:pinecone": "node src/scripts/migratePineconeToOpenAI.js",
-    "migrate:multi-shop": "node src/scripts/migrateShopInstances.js",
     "sync:pedidos": "curl -X POST http://localhost:3000/api/pedidos",
     "sync:test": "node src/scripts/testSyncOrders.js"
   },
