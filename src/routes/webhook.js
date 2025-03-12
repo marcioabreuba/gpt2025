@@ -3,6 +3,8 @@ import express from 'express';
 import { getChat } from '../services/conversationService.js';
 import { processAudioMessage } from '../services/audioService.js';
 // import { sendAudioReceiptConfirmation } from '../services/zapiService.js';
+import { isInHumanMode, sendHumanMessage } from '../services/humanHandoffService.js';
+import redisClient from '../redisClient.js';
 import logger from '../utils/logger.js';
 
 const router = express.Router();
@@ -18,7 +20,21 @@ router.post("/webhook", async (req, res, next) => {
     
     const { type, fromMe, chatLid, text, phone, audio, image } = req.body;
     
-    if (type === "ReceivedCallback" && fromMe === false && phone) {
+    // Verifica se é uma mensagem enviada pelo nosso número (IA Sofia ou operador humano Helena)
+    if (type === "ReceivedCallback" && fromMe === true && text?.message) {
+      // Verifica se o operador humano está no modo de atendimento para este telefone
+      if (await isInHumanMode(phone)) {
+        // Se estiver no modo humano, a mensagem é do operador (Helena)
+        const threadId = await redisClient.get(`threadId:${chatLid}`);
+        
+        // Armazena a mensagem no histórico da conversa
+        await sendHumanMessage(chatLid, phone, text.message, threadId);
+      }
+      // Se não estiver no modo humano, é uma mensagem da IA (Sofia)
+      // Neste caso, não precisamos fazer nada, pois a mensagem já é processada pelo sistema
+    }
+    // Mensagens recebidas dos usuários (não enviadas pelo nosso número)
+    else if (type === "ReceivedCallback" && fromMe === false && phone) {
       // Verificar se é uma imagem
       if (image?.imageUrl) {
         const caption = image.caption || '';
@@ -31,7 +47,7 @@ router.post("/webhook", async (req, res, next) => {
           console.log(`Usuário ${phone}: [IMAGEM sem legenda]`);
         }
         
-        // Processar imagem com legenda (se houver)
+        // Processa imagem com legenda (se houver)
         await getChat(chatLid, phone, null, image.imageUrl, caption);
       }
       // Verificar se é uma mensagem de áudio

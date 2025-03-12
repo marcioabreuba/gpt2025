@@ -13,6 +13,7 @@ import {
 } from './openaiService.js';
 import { processImage } from './servidorImagem.js';
 import { sendReplyZAPI } from './zapiService.js';
+import { isInHumanMode, processHandoffCommand, sendHumanMessage } from './humanHandoffService.js';
 import OpenAI from 'openai';
 import logger from '../utils/logger.js';
 import cleanCitations from '../utils/cleanCitations.js';
@@ -31,6 +32,26 @@ const processingQueue = new Map();
 const pendingMessages = new Map();
 // Timestamp da última limpeza forçada
 let lastForceCleanupTime = Date.now();
+
+/**
+ * Armazena um mapeamento entre telefone e userId no Redis.
+ * Isso permite que o operador humano encontre o userId a partir do telefone.
+ * @param {string} phone - Número de telefone do usuário
+ * @param {string} userId - ID do usuário/chat
+ */
+async function storePhoneToUserIdMapping(phone, userId) {
+  try {
+    if (!phone || !userId) return;
+    
+    // Armazena o mapeamento em ambas as direções
+    await redisClient.set(`userId:${phone}`, userId);
+    await redisClient.set(`phone:${userId}`, phone);
+    
+    logger.debug(`Mapeamento telefone-userId armazenado: ${phone} -> ${userId}`);
+  } catch (error) {
+    logger.error(`Erro ao armazenar mapeamento telefone-userId: ${error.message}`);
+  }
+}
 
 // Função para forçar a limpeza dos maps de processamento
 export function forceResetProcessingState() {
@@ -123,6 +144,25 @@ export async function getChat(userId, phone, message, imageUrl, caption = '', is
 
     if (!userId || (!message && !imageUrl)) {
       throw new Error('userId e message ou imageUrl são obrigatórios');
+    }
+
+    // Armazena o mapeamento entre telefone e userId
+    await storePhoneToUserIdMapping(phone, userId);
+
+    // Verificamos o threadId para processar comandos de handoff
+    const threadId = await redisClient.get(`threadId:${userId}`);
+    
+    // Verifica e processa comandos de alternância entre IA e humano
+    if (message && await processHandoffCommand(message, phone, threadId)) {
+      // Se for um comando de handoff, não prossegue com o processamento normal
+      return { status: "handoff_command_processed" };
+    }
+    
+    // Verifica se este usuário/telefone está no modo de atendimento humano
+    // Se estiver, não processamos a mensagem pela IA
+    if (message && await isInHumanMode(phone)) {
+      // Mensagens humanas não são processadas pela IA
+      return { status: "human_mode_active" };
     }
 
     // Comandos especiais são processados imediatamente
