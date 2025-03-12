@@ -14,7 +14,11 @@ const TRAINING_DATA_KEY_PREFIX = 'training_priority:';
  */
 export async function isInHumanMode(phone) {
   try {
-    const result = await redisClient.get(`${HUMAN_MODE_KEY_PREFIX}${phone}`);
+    const key = `${HUMAN_MODE_KEY_PREFIX}${phone}`;
+    const result = await redisClient.get(key);
+    
+    console.log(`[DEBUG] Verificando modo humano para ${phone}, chave Redis: ${key}, resultado: ${result}`);
+    
     return result === 'true';
   } catch (error) {
     logger.error(`Erro ao verificar modo humano para ${phone}:`, error);
@@ -74,19 +78,40 @@ export async function disableHumanMode(phone) {
 export async function processHandoffCommand(message, phone, threadId) {
   if (!message) return false;
   
-  const normalizedMessage = message.trim().toLowerCase();
+  // Normaliza removendo acentos, espaços extras e convertendo para minúsculas
+  const normalizedMessage = message.trim().toLowerCase()
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "");
   
-  // Comando para ativar o modo humano
-  if (normalizedMessage === 'olá aqui é a helena') {
+  console.log(`[DEBUG] Processando comando: "${message}" -> normalizado: "${normalizedMessage}" (phone: ${phone})`);
+  
+  // Comando para ativar o modo humano - mais flexível com várias opções
+  if (
+    normalizedMessage === 'ola aqui e a helena' || 
+    normalizedMessage === 'olá aqui é a helena' ||
+    normalizedMessage.includes('aqui e a helena') ||
+    normalizedMessage.includes('aqui é a helena') ||
+    normalizedMessage.includes('helena assumindo')
+  ) {
+    console.log(`[DEBUG] Comando de ativação do modo humano detectado para ${phone}`);
     await enableHumanMode(phone, threadId);
-    // Não enviamos confirmação para evitar que seja visível para o usuário
+    // Adicionamos confirmação apenas nos logs, não para o usuário
+    console.log(`[SUCESSO] Modo humano ATIVADO para ${phone}`);
     return true;
   }
   
-  // Comando para desativar o modo humano
-  if (normalizedMessage === 'vou passar pra sofia') {
+  // Comando para desativar o modo humano - mais flexível com várias opções
+  if (
+    normalizedMessage === 'vou passar pra sofia' ||
+    normalizedMessage === 'vou passar para sofia' ||
+    normalizedMessage === 'passando para sofia' ||
+    normalizedMessage.includes('volta para sofia') ||
+    normalizedMessage.includes('volta pra sofia') ||
+    normalizedMessage.includes('desativar modo humano')
+  ) {
+    console.log(`[DEBUG] Comando de desativação do modo humano detectado para ${phone}`);
     await disableHumanMode(phone);
-    // Não enviamos confirmação para evitar que seja visível para o usuário
+    // Adicionamos confirmação apenas nos logs, não para o usuário
+    console.log(`[SUCESSO] Modo humano DESATIVADO para ${phone}`);
     return true;
   }
   

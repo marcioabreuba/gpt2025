@@ -1,6 +1,6 @@
 import express from 'express';
 import redisClient from '../../redisClient.js';
-import { isInHumanMode, processHandoffCommand, sendHumanMessage } from '../../services/humanHandoffService.js';
+import { isInHumanMode, processHandoffCommand, sendHumanMessage, enableHumanMode, disableHumanMode } from '../../services/humanHandoffService.js';
 import config from '../../config.js';
 import logger from '../../utils/logger.js';
 
@@ -95,6 +95,67 @@ router.get('/human/active', authenticateOperator, async (req, res) => {
     });
   } catch (error) {
     logger.error('Erro ao buscar atendimentos humanos ativos:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * POST /api/human/toggle
+ * Endpoint para ativar ou desativar o modo humano diretamente
+ */
+router.post('/human/toggle', authenticateOperator, async (req, res) => {
+  try {
+    const { phone, action } = req.body;
+    
+    if (!phone || !action) {
+      return res.status(400).json({ 
+        error: 'Parâmetros obrigatórios: phone, action (enable/disable)' 
+      });
+    }
+    
+    // Obtém o userId/chatLid baseado no telefone
+    const userIdKey = `userId:${phone}`;
+    const userId = await redisClient.get(userIdKey);
+    
+    if (!userId) {
+      return res.status(404).json({ 
+        error: 'Usuário não encontrado, verifique se já existe uma conversa' 
+      });
+    }
+    
+    // Verifica o ID do thread
+    const threadId = await redisClient.get(`threadId:${userId}`);
+    
+    if (!threadId) {
+      return res.status(404).json({ 
+        error: 'Thread de conversa não encontrado' 
+      });
+    }
+    
+    let result;
+    if (action === 'enable') {
+      result = await enableHumanMode(phone, threadId);
+      logger.info(`Modo humano ativado manualmente via API para ${phone}`);
+      return res.json({
+        success: true,
+        message: 'Modo humano ativado com sucesso',
+        phone
+      });
+    } else if (action === 'disable') {
+      result = await disableHumanMode(phone);
+      logger.info(`Modo humano desativado manualmente via API para ${phone}`);
+      return res.json({
+        success: true,
+        message: 'Modo humano desativado com sucesso',
+        phone
+      });
+    } else {
+      return res.status(400).json({
+        error: 'Ação inválida, use "enable" para ativar ou "disable" para desativar'
+      });
+    }
+  } catch (error) {
+    logger.error('Erro ao alternar modo humano via API:', error);
     res.status(500).json({ error: error.message });
   }
 });
