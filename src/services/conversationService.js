@@ -16,7 +16,7 @@ import { sendReplyZAPI } from './zapiService.js';
 import OpenAI from 'openai';
 import logger from '../utils/logger.js';
 import cleanCitations from '../utils/cleanCitations.js';
-import { isAssistantPaused } from './assistantController.js';
+import { isAssistantPaused, storeChatLidForPhone } from './assistantController.js';
 
 const openai = new OpenAI({ apiKey: config.openai.apiKey });
 const messageBuffers = new Map();
@@ -124,6 +124,11 @@ export async function getChat(userId, phone, message, imageUrl, caption = '', is
 
     if (!userId || (!message && !imageUrl)) {
       throw new Error('userId e message ou imageUrl são obrigatórios');
+    }
+
+    // Sempre registra o mapeamento de telefone para chatLid
+    if (phone && userId) {
+      storeChatLidForPhone(phone, userId);
     }
 
     // Comandos especiais são processados imediatamente
