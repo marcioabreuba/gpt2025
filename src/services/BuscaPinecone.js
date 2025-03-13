@@ -4,10 +4,15 @@ import config from '../config.js';
 // Inicializa o cliente Pinecone para vetores de texto e imagem
 const pc = new Pinecone({ apiKey: config.pinecone.apiKey });
 
+// Usa config.pinecone.index para texto e 'image' para imagens
+// Isto pode ser modificado para usar uma variável de ambiente específica no futuro
+const TEXT_INDEX = config.pinecone.index;
+const IMAGE_INDEX = 'image';
+
 async function pineconeSearch(type, query) {
   try {
     // Determina qual índice usar com base no tipo
-    const index = type === 'text' ? await pc.index(config.pinecone.index) : await pc.index('image');
+    const index = type === 'text' ? await pc.index(TEXT_INDEX) : await pc.index(IMAGE_INDEX);
     
     // Parâmetros de busca - removido o filtro de score
     const searchParams = {

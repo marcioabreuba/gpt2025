@@ -4,16 +4,21 @@ const { PrismaClient } = pkg;
 import axios from 'axios';
 import { Pinecone } from '@pinecone-database/pinecone';
 import logger from '../utils/logger.js';
+import config from '../config.js';
 
 // Inicializa o cliente Pinecone para lidar com vetores de texto e imagem
 const pc = new Pinecone({
-    apiKey: process.env.PINECONE_API_KEY,
+    apiKey: config.pinecone.apiKey,
     controllerHostUrl: "https://controller.us-west1-gcp.pinecone.io"
 });
 
+// Define índices para texto e imagem
+const TEXT_INDEX = config.pinecone.index;
+const IMAGE_INDEX = 'image';
+
 // Configuração dos endpoints diretos para API REST
-const TEXT_ENDPOINT = "https://tropicalize-products-rzi4pqr.svc.aped-4627-b74a.pinecone.io/vectors/upsert";
-const IMAGE_ENDPOINT = "https://image-rzi4pqr.svc.aped-4627-b74a.pinecone.io/vectors/upsert";
+const TEXT_ENDPOINT = `https://${TEXT_INDEX}-rzi4pqr.svc.aped-4627-b74a.pinecone.io/vectors/upsert`;
+const IMAGE_ENDPOINT = `https://${IMAGE_INDEX}-rzi4pqr.svc.aped-4627-b74a.pinecone.io/vectors/upsert`;
 
 // Inicializa o cliente Prisma para interação com o banco de dados
 const prisma = new PrismaClient();
@@ -173,7 +178,7 @@ async function processQueueTraining() {
           { vectors: textVectors, namespace: '' },
           { 
             headers: { 
-              'Api-Key': process.env.PINECONE_API_KEY, 
+              'Api-Key': config.pinecone.apiKey, 
               'Content-Type': 'application/json' 
             } 
           }
@@ -211,7 +216,7 @@ async function processQueueTraining() {
           { vectors: imageVectors, namespace: '' },
           { 
             headers: { 
-              'Api-Key': process.env.PINECONE_API_KEY, 
+              'Api-Key': config.pinecone.apiKey, 
               'Content-Type': 'application/json' 
             } 
           }
