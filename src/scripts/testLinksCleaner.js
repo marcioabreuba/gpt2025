@@ -1,21 +1,26 @@
 // Este script testa a funcionalidade de limpeza de links
 
 import cleanLinks from '../utils/cleanLinks.js';
+import config from '../config.js';
 
 console.log('\n===== TESTE DE LIMPEZA DE LINKS =====\n');
+
+// URL da loja configurada
+const storeUrl = config.store.url;
+const storeUrlBase = storeUrl.replace(/^www\./i, '');
 
 // Exemplos de textos com diferentes formatos de links para testar
 const testCases = [
   // Teste 1: Link com formatação markdown
   {
-    input: 'Você pode conferir o produto através do link: [Kaftan Exuberante Preto e Dourado](https://www.tropicalize.com.br/products/kaftan-exuberante-preto-e-dourado).',
-    expected: 'Você pode conferir o produto através do link: Kaftan Exuberante Preto e Dourado\nLink: tropicalize.com.br/products/kaftan-exuberante-preto-e-dourado.'
+    input: `Você pode conferir o produto através do link: [Kaftan Exuberante Preto e Dourado](https://www.${storeUrl}/products/kaftan-exuberante-preto-e-dourado).`,
+    expected: `Você pode conferir o produto através do link: Kaftan Exuberante Preto e Dourado\nLink: ${storeUrlBase}/products/kaftan-exuberante-preto-e-dourado.`
   },
   
   // Teste 2: Link direto com https e www
   {
-    input: 'Visite nosso site em https://www.tropicalize.com.br para mais produtos.',
-    expected: 'Visite nosso site em Link: tropicalize.com.br para mais produtos.'
+    input: `Visite nosso site em https://www.${storeUrl} para mais produtos.`,
+    expected: `Visite nosso site em Link: ${storeUrlBase} para mais produtos.`
   },
   
   // Teste 3: Link para site externo - deve ser removido
@@ -32,14 +37,14 @@ const testCases = [
   
   // Teste 5: Múltiplos links em um texto
   {
-    input: 'Confira estes produtos: [Vestido Azul](https://tropicalize.com.br/products/vestido-azul) e [Saída de Praia](https://www.tropicalize.com.br/products/saida)',
-    expected: 'Confira estes produtos: Vestido Azul\nLink: tropicalize.com.br/products/vestido-azul e Saída de Praia\nLink: tropicalize.com.br/products/saida'
+    input: `Confira estes produtos: [Vestido Azul](https://${storeUrl}/products/vestido-azul) e [Saída de Praia](https://www.${storeUrl}/products/saida)`,
+    expected: `Confira estes produtos: Vestido Azul\nLink: ${storeUrlBase}/products/vestido-azul e Saída de Praia\nLink: ${storeUrlBase}/products/saida`
   },
   
   // Teste 6: O exemplo do problema original 
   {
-    input: 'Você pode conferir o produto através do link: [Kaftan Exuberante Preto e Dourado](https://www.tropicalize.com.br/products/kaftan-exuberante-preto-e-dourado).',
-    expected: 'Você pode conferir o produto através do link: Kaftan Exuberante Preto e Dourado\nLink: tropicalize.com.br/products/kaftan-exuberante-preto-e-dourado.'
+    input: `Você pode conferir o produto através do link: [Kaftan Exuberante Preto e Dourado](https://www.${storeUrl}/products/kaftan-exuberante-preto-e-dourado).`,
+    expected: `Você pode conferir o produto através do link: Kaftan Exuberante Preto e Dourado\nLink: ${storeUrlBase}/products/kaftan-exuberante-preto-e-dourado.`
   }
 ];
 

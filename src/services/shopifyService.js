@@ -91,7 +91,7 @@ export async function getProductsByCollectionId(collectionId) {
   const productsWithInventory = allProducts.map(product => ({
     title: product.title,
     handle: product.handle,
-    public_url: `https://www.tropicalize.com.br/products/${product.handle}`,
+    public_url: `https://www.${config.store.url}/products/${product.handle}`,
     variants: product.variants
       ? product.variants.map(variant => ({
         id: variant.id,
@@ -117,7 +117,7 @@ export async function buscarProdutoPorId(productId) {
     const productItem = await shopify.product.get(productId);
 
     return {
-      public_url: `https://www.tropicalize.com.br/products/${productItem.handle}`,
+      public_url: `https://www.${config.store.url}/products/${productItem.handle}`,
       title: productItem.title,
       price: productItem.variants[0].price,
       description: productItem.body_html,

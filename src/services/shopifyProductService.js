@@ -32,7 +32,7 @@ export async function getProductsByCategory(category) {
       title: product.title,
       description: product.body_html.replace(/<[^>]*>/g, ''), // remove HTML
       price: product.variants[0]?.price || '',
-      url: `https://www.tropicalize.com.br/products/${product.handle}`,
+      url: `https://www.${config.store.url}/products/${product.handle}`,
       image: product.images[0]?.src || ''
     }));
     

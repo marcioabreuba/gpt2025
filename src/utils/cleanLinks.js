@@ -7,6 +7,8 @@
  * - NUNCA enviar links com placeholders (CÓDIGO_RASTREIO, NOME_PRODUTO, etc.)
  */
 
+import config from '../config.js';
+
 /**
  * Corrige os links na mensagem de acordo com as regras estabelecidas
  * @param {string} text - O texto da resposta que pode conter links
@@ -15,17 +17,20 @@
 export function cleanLinks(text) {
   if (!text) return text;
   
+  // URL da loja configurada
+  const storeUrl = config.store.url;
+  
   // Etapa 0: Remover links com placeholders primeiro
   let result = text.replace(/(Link:\s+)?[^\s]*(CÓDIGO_RASTREIO|NOME_PRODUTO|%[^%\s]+%)[^\s]*/gi, '');
   
   // Etapa 1: Limpar links em formato markdown [texto](url)
   result = result.replace(/\[([^\]]+)\]\((https?:\/\/)?(?:www\.)?([^)]+)\)/g, (match, linkText, protocol, url) => {
-    // Se for link da tropicalize, mantém o texto e adiciona o link formatado corretamente
-    if (url.includes('tropicalize.com.br')) {
+    // Se for link da loja, mantém o texto e adiciona o link formatado corretamente
+    if (url.includes(storeUrl)) {
       const cleanUrl = url.replace(/^https?:\/\//i, '').replace(/^www\./i, '');
       return `${linkText}\n${cleanUrl}`;
     }
-    // Se não for link da tropicalize, mantém só o texto
+    // Se não for link da loja, mantém só o texto
     return linkText;
   });
   
@@ -55,7 +60,7 @@ export function cleanLinks(text) {
         startIndex,
         endIndex,
         isAlreadyLink,
-        isTropicalize: url.includes('tropicalize.com.br')
+        isStoreDomain: url.includes(storeUrl)
       });
     }
   }
@@ -73,14 +78,14 @@ export function cleanLinks(text) {
       }
     }
     
-    if (item.isTropicalize) {
-      // Se for link da tropicalize, formata corretamente
+    if (item.isStoreDomain) {
+      // Se for link da loja, formata corretamente
       const cleanUrl = item.url.replace(/^https?:\/\//i, '').replace(/^www\./i, '');
       result = result.substring(0, adjustedStartIndex) + 
                cleanUrl + 
                result.substring(item.endIndex);
     } else {
-      // Se não for link da tropicalize, remove o protocolo e www
+      // Se não for link da loja, remove o protocolo e www
       const plainUrl = item.url;
       result = result.substring(0, adjustedStartIndex) + 
                plainUrl + 

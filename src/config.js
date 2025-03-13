@@ -54,6 +54,12 @@ export default {
   // URL do servidor
   serverLink: process.env.SERVER_LINK,
 
+  // Configuração da loja
+  store: {
+    url: process.env.STORE_URL || 'tropicalize.com.br',
+    name: process.env.STORE_NAME || 'Tropicalize'
+  },
+
   // Fuso horário padrão
   timezone: "America/Sao_Paulo",
   
