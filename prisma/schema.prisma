@@ -1,0 +1,31 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Orders {
+  @@map("SoleTerra_Orders")
+  id         Int      @id @default(autoincrement())
+  orderId    String   @unique
+  phone      String
+  cpf        String
+  externalId String   @unique
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @default(now()) @updatedAt
+}
+
+model QueueTraining {
+  @@map("SoleTerra_QueueTraining")
+  id        String   @id @default(uuid())
+  status    Boolean  @default(false) // true se subiu no pinecone ou false se não.
+  type      String // image ou text
+  productId BigInt // id do produto 
+  content   String // nome do produto, link do produto ou descrição
+  metadata  Json? // para as imagens vai armazenar os variantIds
+  updatedAt DateTime @default(now()) @updatedAt
+  createdAt DateTime @default(now())
+}

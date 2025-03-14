@@ -1,0 +1,3 @@
+### Teste de GET Orders
+POST http://localhost:3000/api/pedidos
+Content-Type: application/json
