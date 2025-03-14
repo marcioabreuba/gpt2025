@@ -32,6 +32,7 @@ process.on('unhandledRejection', (reason, promise) => {
 // Importa os cronjobs (eles rodam automaticamente)
 import './services/cronjobTraining.js'
 import './services/cronjobOrders.js'
+import './services/cronjobProducts.js'
 import { forceResetProcessingState } from './services/conversationService.js';
 
 // Rotas
