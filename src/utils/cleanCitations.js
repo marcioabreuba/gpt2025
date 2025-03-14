@@ -1,6 +1,6 @@
 /**
  * Utilitário para remover citações do vector store das respostas e limpar logs
- * - Remove citações no formato 【X:Y†source】
+ * - Remove citações no formato 【X:Y†source】 ou qualquer conteúdo entre 【】
  * - Limpa logs e informações técnicas
  * - Ajusta formatação de negrito
  */
@@ -13,8 +13,8 @@
 export function cleanCitations(text) {
   if (!text) return text;
   
-  // Remove qualquer coisa no formato 【X:Y†source】
-  let cleanedText = text.replace(/【\d+:\d+†source】/g, '');
+  // Remove qualquer conteúdo entre 【 e 】, incluindo os delimitadores
+  let cleanedText = text.replace(/【[^】]*】/g, '');
   
   // Extrair apenas o conteúdo da mensagem (o que vem após "IA → [número]:")
   const messagePattern = /IA → \d+:\s*([\s\S]+?)(?=\d{4}-\d{2}-\d{2}|$)/;
