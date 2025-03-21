@@ -108,17 +108,20 @@ export async function describeImage(imagePath, caption = '') {
  */
 export async function analyzeImageContent(imagePath) {
   try {
+    console.log("🔍 INÍCIO: Analisando conteúdo da imagem com GPT-4o...");
+    console.log("📄 Imagem sendo analisada:", imagePath);
+    
     const imageBuffer = fs.readFileSync(imagePath);
     const base64Image = imageBuffer.toString('base64');
     
-    // Usando um prompt específico para identificar o tipo de imagem
+    // Usando um prompt específico para identificar o tipo de imagem e extrair texto visível
     const messages = [
       {
         role: "user",
         content: [
           { 
             type: "text", 
-            text: "Analise esta imagem e identifique se é: 1) Um produto (qual categoria?), 2) Um comprovante de pagamento (extraia data, valor e ID), ou 3) Outro tipo. Retorne em formato JSON com a estrutura: {tipo: 'produto|comprovante|outro', detalhes: {...}}" 
+            text: "Analise esta imagem com ATENÇÃO ESPECIAL a qualquer TEXTO ou NOME visível nela. Identifique se é: 1) Um produto (qual categoria e NOME EXATO do produto se visível na imagem), 2) Um comprovante de pagamento (extraia data, valor e ID), ou 3) Outro tipo. Se for um produto, busque cuidadosamente qualquer nome ou identificador do produto que esteja escrito/impresso na imagem. Retorne em formato JSON com a estrutura: {tipo: 'produto|comprovante|outro', detalhes: {...}}" 
           },
           { 
             type: "image_url", 
@@ -128,16 +131,43 @@ export async function analyzeImageContent(imagePath) {
       }
     ];
 
+    console.log("📤 Enviando imagem para análise com GPT-4o...");
+    
     const response = await openai.chat.completions.create({
       model: "gpt-4o",
       messages,
       response_format: { type: "json_object" }
     });
 
+    console.log("📥 Resposta recebida do GPT-4o");
+    
     const analysisResult = JSON.parse(response.choices[0]?.message?.content || '{"tipo":"outro"}');
+    
+    // Log específico para mostrar o tipo de conteúdo identificado
+    console.log(`🏷️ Tipo de conteúdo identificado: ${analysisResult.tipo}`);
+    
+    // Log detalhado para produtos
+    if (analysisResult.tipo === "produto") {
+      console.log("🛍️ PRODUTO DETECTADO nas seguintes informações:");
+      console.log("📝 Categoria:", analysisResult.detalhes?.categoria || "Não especificada");
+      console.log("📝 Nome do produto:", analysisResult.detalhes?.nome || "Não encontrado");
+      console.log("📝 Descrição:", analysisResult.detalhes?.descricao || "Não disponível");
+      
+      // Adicionar campo de nome para compatibilidade se não existir
+      if (!analysisResult.detalhes.nome && analysisResult.detalhes.descricao) {
+        // Verificar se a descrição parece conter um nome de produto
+        const possibleName = analysisResult.detalhes.descricao.split('.')[0].trim();
+        if (possibleName.length < 50) { // Se for curto o suficiente para ser um nome
+          console.log("🔄 Extraindo possível nome do produto da descrição:", possibleName);
+          analysisResult.detalhes.nome = possibleName;
+        }
+      }
+    }
+    
+    console.log("📊 Resultado completo da análise:", JSON.stringify(analysisResult, null, 2));
     return analysisResult;
   } catch (error) {
-    console.error('Erro ao analisar conteúdo da imagem:', error);
+    console.error('❌ Erro ao analisar conteúdo da imagem:', error);
     return { tipo: "erro", detalhes: error.message };
   }
 }

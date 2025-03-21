@@ -205,21 +205,36 @@ async function embeddingImage(imageUrl) {
   return response.data.data[0]?.embedding;
 }
 
-export async function get_products_info_by_image(imageUrl) {
+export async function get_products_info_by_image(imageUrl, extractedTextInfo = null) {
   try {
+    console.log("🖼️ INÍCIO: Busca por similaridade visual de imagem");
     logger.debug("ImageUrl", imageUrl);
+    
+    // Log de informações de texto extraídas (se disponíveis)
+    if (extractedTextInfo) {
+      console.log("📝 Informações de texto extraídas disponíveis:", JSON.stringify(extractedTextInfo, null, 2));
+      // Futura implementação: utilizar o texto extraído para melhorar a busca
+    } else {
+      console.log("ℹ️ Nenhuma informação de texto extraída disponível. Usando apenas busca visual.");
+    }
 
     // Gerar embeddings
-    const vectorsImage = await embeddingImage(imageUrl); // importar
+    console.log("🧠 Gerando embeddings visuais via Jina CLIP...");
+    const vectorsImage = await embeddingImage(imageUrl);
+    console.log("✅ Embeddings visuais gerados com sucesso");
     logger.trace("Embeddings gerados:", vectorsImage);
 
     // Buscar itens no Pinecone
+    console.log("🔍 Buscando produtos similares no Pinecone...");
     const itemsSearch = await pineconeSearch('image', vectorsImage);
+    console.log(`🔢 Número de resultados encontrados: ${itemsSearch.length}`);
+    console.log("🏆 Top resultados:", JSON.stringify(itemsSearch.slice(0, 3), null, 2));
     logger.trace("Itens encontrados no Pinecone:", JSON.stringify(itemsSearch, null, 2));
 
     // Achatar o array de items e remover productIds duplicados
     const flattenedItems = [...new Set(itemsSearch.flat().map(item => JSON.stringify(item)))]
       .map(item => JSON.parse(item));
+    console.log(`🧹 Após remoção de duplicatas: ${flattenedItems.length} itens únicos`);
     logger.debug("Itens achatados sem duplicatas:", flattenedItems);
 
     // Função para adicionar delay
@@ -231,11 +246,13 @@ export async function get_products_info_by_image(imageUrl) {
       .map(async (item, index) => {
         // Adicionar delay proporcional para cada requisição
         await delay(index * 3000);
+        console.log(`🔎 Buscando detalhes do produto ${index+1}/${Math.min(flattenedItems.length, 8)}: ID ${item.productId}`);
         return buscarProdutoPorId(item.productId);
       });
 
     // Executar as promises e filtrar produtos válidos
     const products = (await Promise.all(productsPromises)).filter(product => product !== null);
+    console.log(`✅ ${products.length} produtos encontrados com detalhes completos`);
 
     logger.debug("Produtos finais:", products);
 
@@ -247,14 +264,17 @@ export async function get_products_info_by_image(imageUrl) {
       return `Título: ${product.title}. Preço: R$ ${product.price}. Descrição: ${cleanDescription}. Link do produto: ${product.public_url}.`;
     }).join(' ');
 
+    console.log(`🏁 Busca visual concluída. ${products.length} produtos encontrados.`);
+    if (products.length > 0) {
+      console.log(`📊 Primeiro produto encontrado: ${products[0].title} - R$ ${products[0].price}`);
+    }
+    
     logger.debug("String de produtos:", productsString);
 
     return productsString;
   } catch (error) {
+    console.error('❌ ERRO na busca visual:', error);
     logger.error("Erro detalhado ao recuperar informações de produtos:", error);
-    return {
-      error: "Falha ao recuperar informações de produtos",
-      detailedError: error.message
-    };
+    return "Não foi possível encontrar produtos similares. Erro: " + error.message;
   }
 }
