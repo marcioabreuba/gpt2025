@@ -38,13 +38,47 @@ export async function processImage(imageUrl) {
       
       // Verificar se a análise foi bem-sucedida (não é um erro)
       if (textAnalysis.tipo !== 'erro') {
-        textExtractionSuccess = true;
-        
-        // Ver se há nome de produto na análise
-        if (textAnalysis.tipo === 'produto' && (textAnalysis.detalhes?.nome_exato || textAnalysis.detalhes?.nome)) {
-          const productName = textAnalysis.detalhes?.nome_exato || textAnalysis.detalhes?.nome;
-          console.log("✅ NOME DE PRODUTO ENCONTRADO NO TEXTO:", productName);
-          console.log("🔍 Este nome será usado prioritariamente na busca de produtos");
+        // Verificar se há textos realmente visíveis na imagem
+        if (textAnalysis.texto_visivel === true) {
+          textExtractionSuccess = true;
+          
+          if (textAnalysis.tipo === 'produto') {
+            // Verificar se há nome de produto nos textos extraídos
+            if (textAnalysis.nome_produto) {
+              console.log("✅ NOME DE PRODUTO ENCONTRADO NO TEXTO VISÍVEL:", textAnalysis.nome_produto);
+              
+              // Verificar a confiança dos textos extraídos
+              let confiancaNomeProduto = 0;
+              if (textAnalysis.textos_encontrados && textAnalysis.textos_encontrados.length > 0) {
+                // Encontrar o texto classificado como NOME_PRODUTO com maior confiança
+                const nomeProdutoEncontrado = textAnalysis.textos_encontrados.find(t => 
+                  t.tipo === 'NOME_PRODUTO' && t.texto === textAnalysis.nome_produto
+                );
+                
+                if (nomeProdutoEncontrado) {
+                  confiancaNomeProduto = nomeProdutoEncontrado.confiança || 0;
+                  console.log(`🎯 Confiança na extração do nome: ${confiancaNomeProduto}`);
+                  
+                  // Adicionar confiança ao objeto de análise para uso na busca
+                  textAnalysis.confianca_nome = confiancaNomeProduto;
+                  
+                  // Garantir compatibilidade com o formato anterior
+                  textAnalysis.detalhes = textAnalysis.detalhes || {};
+                  textAnalysis.detalhes.nome_exato = textAnalysis.nome_produto;
+                }
+              }
+              
+              if (confiancaNomeProduto >= 0.7) {
+                console.log("🔍 Este nome será usado prioritariamente na busca de produtos");
+              } else if (confiancaNomeProduto > 0) {
+                console.log("⚠️ Nome extraído com baixa confiança. Pode ser considerado, mas com cautela.");
+              }
+            } else {
+              console.log("ℹ️ Produto detectado, mas nenhum nome de produto visível encontrado na imagem");
+            }
+          }
+        } else {
+          console.log("ℹ️ Não foram encontrados textos visíveis relevantes na imagem");
         }
       } else {
         console.log("⚠️ Análise de texto falhou, mas continuaremos com busca visual");
@@ -72,10 +106,9 @@ export async function processImage(imageUrl) {
               (searchResults.length > 150 ? "..." : ""));
     
     // Comparar resultado de busca visual com análise de texto (se disponível)
-    if (textExtractionSuccess && textAnalysis.tipo === 'produto') {
-      const productName = textAnalysis.detalhes?.nome_exato || textAnalysis.detalhes?.nome;
+    if (textExtractionSuccess && textAnalysis.tipo === 'produto' && textAnalysis.nome_produto) {
       console.log("⚖️ COMPARAÇÃO: Texto extraído vs. Resultado final");
-      console.log("📝 Texto extraído sugeriu:", productName || "N/A");
+      console.log("📝 Texto extraído sugeriu:", textAnalysis.nome_produto);
       
       // Verificar se o resultado contém a indicação de busca por texto bem-sucedida
       if (searchResults.includes("🏷️ Produto identificado pelo nome:")) {

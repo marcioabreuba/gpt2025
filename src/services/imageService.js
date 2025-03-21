@@ -252,7 +252,36 @@ export async function analyzeImageContent(imagePath) {
             content: [
               { 
                 type: "text", 
-                text: "Analise esta imagem com ATENÇÃO ESPECIAL a qualquer TEXTO ou NOME visível nela. Identifique se é: 1) Um produto (qual categoria e NOME EXATO do produto se visível na imagem), 2) Um comprovante de pagamento (extraia data, valor e ID), ou 3) Outro tipo. Se for um produto, busque cuidadosamente qualquer nome ou identificador do produto que esteja escrito/impresso na imagem. Retorne em formato JSON com a estrutura: {tipo: 'produto|comprovante|outro', detalhes: {nome_exato: 'nome do produto se encontrado', categoria: 'tipo de produto', descricao: 'descrição breve se visível'}}" 
+                text: `Analise esta imagem de produto e:
+1. EXTRAIA todos os textos LITERALMENTE VISÍVEIS na imagem (apenas o que está escrito/impresso)
+2. CLASSIFIQUE cada texto encontrado como:
+   - NOME_PRODUTO: Nome principal/completo do produto 
+   - MARCA: Nome da marca/fabricante
+   - DESCRIÇÃO: Descritivo de características 
+   - PREÇO: Valores monetários
+   - OUTROS: Qualquer outro texto
+
+IMPORTANTE:
+- Extraia APENAS textos realmente visíveis (não invente descrições)
+- Se não houver textos visíveis, indique claramente
+- Se houver vários textos, classifique cada um separadamente
+- Um nome de produto geralmente contém: [tipo do item] + [modelo/linha] (ex: "Bolsa de Palha Arpoador")
+- Se for um comprovante de pagamento, extraia data, valor e informações de identificação
+
+Retorne em JSON com a estrutura:
+{
+  "tipo": "produto|comprovante|outro",
+  "textos_encontrados": [
+    {"texto": "texto extraído 1", "tipo": "NOME_PRODUTO/MARCA/etc", "confiança": 0-1},
+    {"texto": "texto extraído 2", "tipo": "...", "confiança": 0-1}
+  ],
+  "texto_visivel": true/false,
+  "nome_produto": "texto identificado como nome do produto ou null",
+  "detalhes": {
+    "categoria": "tipo de produto se identificável visualmente",
+    "descrição": "breve descrição visual do item"
+  }
+}` 
               },
               { 
                 type: "image_url", 
@@ -272,9 +301,35 @@ export async function analyzeImageContent(imagePath) {
         
         console.log("📥 Resposta recebida do GPT-4o via URL");
         
-        const analysisResult = JSON.parse(response.choices[0]?.message?.content || '{"tipo":"outro"}');
+        const analysisResult = JSON.parse(response.choices[0]?.message?.content || '{"tipo":"outro", "texto_visivel": false}');
         
         console.log(`🏷️ Tipo de conteúdo identificado via URL: ${analysisResult.tipo}`);
+        console.log(`📝 Textos visíveis identificados: ${analysisResult.texto_visivel ? 'SIM' : 'NÃO'}`);
+        
+        // Processamento adicional para compatibilidade com o formato anterior
+        if (analysisResult.tipo === "produto") {
+          // Garantir que temos um campo nome_exato para compatibilidade
+          analysisResult.detalhes = analysisResult.detalhes || {};
+          
+          // Usar o nome_produto como nome_exato se existir
+          if (analysisResult.nome_produto) {
+            analysisResult.detalhes.nome_exato = analysisResult.nome_produto;
+          }
+          
+          // Log de textos encontrados para análise
+          if (analysisResult.textos_encontrados && analysisResult.textos_encontrados.length > 0) {
+            console.log("📋 TEXTOS ENCONTRADOS NA IMAGEM:");
+            analysisResult.textos_encontrados.forEach(item => {
+              console.log(`- "${item.texto}" (${item.tipo}, confiança: ${item.confiança})`);
+            });
+          }
+          
+          // Log específico para produto
+          console.log("🛍️ PRODUTO DETECTADO:");
+          console.log("📝 Categoria:", analysisResult.detalhes.categoria || "Não especificada");
+          console.log("📝 Nome do produto:", analysisResult.nome_produto || "Não encontrado");
+        }
+        
         return analysisResult;
       } catch (urlAnalysisError) {
         console.error("❌ Erro ao analisar imagem via URL:", urlAnalysisError);
@@ -286,14 +341,43 @@ export async function analyzeImageContent(imagePath) {
     const imageBuffer = fs.readFileSync(processedImagePath);
     const base64Image = imageBuffer.toString('base64');
     
-    // Usando um prompt específico para identificar o tipo de imagem e extrair texto visível
+    // Usando um prompt específico para extrair textos visíveis na imagem
     const messages = [
       {
         role: "user",
         content: [
           { 
             type: "text", 
-            text: "Analise esta imagem com ATENÇÃO ESPECIAL a qualquer TEXTO ou NOME visível nela. Identifique se é: 1) Um produto (qual categoria e NOME EXATO do produto se visível na imagem), 2) Um comprovante de pagamento (extraia data, valor e ID), ou 3) Outro tipo. Se for um produto, busque cuidadosamente qualquer nome ou identificador do produto que esteja escrito/impresso na imagem. Retorne em formato JSON com a estrutura: {tipo: 'produto|comprovante|outro', detalhes: {nome_exato: 'nome do produto se encontrado', categoria: 'tipo de produto', descricao: 'descrição breve se visível'}}" 
+            text: `Analise esta imagem de produto e:
+1. EXTRAIA todos os textos LITERALMENTE VISÍVEIS na imagem (apenas o que está escrito/impresso)
+2. CLASSIFIQUE cada texto encontrado como:
+   - NOME_PRODUTO: Nome principal/completo do produto 
+   - MARCA: Nome da marca/fabricante
+   - DESCRIÇÃO: Descritivo de características 
+   - PREÇO: Valores monetários
+   - OUTROS: Qualquer outro texto
+
+IMPORTANTE:
+- Extraia APENAS textos realmente visíveis (não invente descrições)
+- Se não houver textos visíveis, indique claramente
+- Se houver vários textos, classifique cada um separadamente
+- Um nome de produto geralmente contém: [tipo do item] + [modelo/linha] (ex: "Bolsa de Palha Arpoador")
+- Se for um comprovante de pagamento, extraia data, valor e informações de identificação
+
+Retorne em JSON com a estrutura:
+{
+  "tipo": "produto|comprovante|outro",
+  "textos_encontrados": [
+    {"texto": "texto extraído 1", "tipo": "NOME_PRODUTO/MARCA/etc", "confiança": 0-1},
+    {"texto": "texto extraído 2", "tipo": "...", "confiança": 0-1}
+  ],
+  "texto_visivel": true/false,
+  "nome_produto": "texto identificado como nome do produto ou null",
+  "detalhes": {
+    "categoria": "tipo de produto se identificável visualmente",
+    "descrição": "breve descrição visual do item"
+  }
+}`
           },
           { 
             type: "image_url", 
@@ -313,42 +397,41 @@ export async function analyzeImageContent(imagePath) {
 
     console.log("📥 Resposta recebida do GPT-4o");
     
-    const analysisResult = JSON.parse(response.choices[0]?.message?.content || '{"tipo":"outro"}');
+    const analysisResult = JSON.parse(response.choices[0]?.message?.content || '{"tipo":"outro", "texto_visivel": false}');
     
     // Log específico para mostrar o tipo de conteúdo identificado
     console.log(`🏷️ Tipo de conteúdo identificado: ${analysisResult.tipo}`);
+    console.log(`📝 Textos visíveis identificados: ${analysisResult.texto_visivel ? 'SIM' : 'NÃO'}`);
     
-    // Log detalhado para produtos
+    // Log de textos encontrados para análise
+    if (analysisResult.textos_encontrados && analysisResult.textos_encontrados.length > 0) {
+      console.log("📋 TEXTOS ENCONTRADOS NA IMAGEM:");
+      analysisResult.textos_encontrados.forEach(item => {
+        console.log(`- "${item.texto}" (${item.tipo}, confiança: ${item.confiança})`);
+      });
+    }
+    
+    // Processamento adicional para compatibilidade com o formato anterior
     if (analysisResult.tipo === "produto") {
-      console.log("🛍️ PRODUTO DETECTADO nas seguintes informações:");
-      console.log("📝 Categoria:", analysisResult.detalhes?.categoria || "Não especificada");
+      // Garantir que temos campos de detalhes
+      analysisResult.detalhes = analysisResult.detalhes || {};
       
-      // Verificar nome_exato primeiro, depois nome regular
-      const productName = analysisResult.detalhes?.nome_exato || analysisResult.detalhes?.nome || null;
-      console.log("📝 Nome do produto:", productName || "Não encontrado");
-      console.log("📝 Descrição:", analysisResult.detalhes?.descricao || "Não disponível");
-      
-      // Adicionar campo de nome para compatibilidade se não existir
-      if (!productName && analysisResult.detalhes.descricao) {
-        // Verificar se a descrição parece conter um nome de produto
-        const possibleName = analysisResult.detalhes.descricao.split('.')[0].trim();
-        if (possibleName.length < 50) { // Se for curto o suficiente para ser um nome
-          console.log("🔄 Extraindo possível nome do produto da descrição:", possibleName);
-          analysisResult.detalhes.nome = possibleName;
-        }
+      // Usar o nome_produto como nome_exato se existir
+      if (analysisResult.nome_produto) {
+        analysisResult.detalhes.nome_exato = analysisResult.nome_produto;
       }
       
-      // Garantir que temos um campo nome_exato para consistência
-      if (!analysisResult.detalhes.nome_exato && productName) {
-        analysisResult.detalhes.nome_exato = productName;
-      }
+      // Log específico para produto
+      console.log("🛍️ PRODUTO DETECTADO:");
+      console.log("📝 Categoria:", analysisResult.detalhes.categoria || "Não especificada");
+      console.log("📝 Nome do produto:", analysisResult.nome_produto || "Não encontrado");
     }
     
     console.log("📊 Resultado completo da análise:", JSON.stringify(analysisResult, null, 2));
     return analysisResult;
   } catch (error) {
     console.error('❌ Erro ao analisar conteúdo da imagem:', error);
-    return { tipo: "erro", detalhes: error.message };
+    return { tipo: "erro", texto_visivel: false, detalhes: error.message };
   } finally {
     // Limpar imagem processada se diferente da original
     if (processedImagePath && processedImagePath !== imagePath && fs.existsSync(processedImagePath)) {

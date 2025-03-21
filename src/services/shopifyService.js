@@ -214,16 +214,45 @@ export async function get_products_info_by_image(imageUrl, extractedTextInfo = n
     let productNameFromText = null;
     let textSearchAttempted = false;
     let textSearchResults = null;
+    let shouldUseTextSearch = false;
     
     if (extractedTextInfo && extractedTextInfo.tipo === 'produto') {
       console.log("📝 Informações de texto extraídas disponíveis:", JSON.stringify(extractedTextInfo, null, 2));
       
-      // Extrair nome do produto se disponível
-      if (extractedTextInfo.detalhes?.nome_exato || extractedTextInfo.detalhes?.nome) {
-        productNameFromText = extractedTextInfo.detalhes?.nome_exato || extractedTextInfo.detalhes?.nome;
-        console.log("💡 Nome de produto extraído do texto:", productNameFromText);
+      // Verificar primeiro se há textos visíveis na imagem
+      if (extractedTextInfo.texto_visivel === true && extractedTextInfo.nome_produto) {
+        productNameFromText = extractedTextInfo.nome_produto;
+        const confianca = extractedTextInfo.confianca_nome || 0;
         
-        // PRIORIDADE: Busca por texto quando temos um nome de produto
+        console.log(`💡 Nome de produto extraído do TEXTO VISÍVEL: "${productNameFromText}" (confiança: ${confianca})`);
+        
+        // Decidir se devemos usar a busca por texto com base na confiança
+        if (confianca >= 0.7) {
+          console.log("✅ Confiança ALTA no texto extraído. Priorizando busca por TEXTO.");
+          shouldUseTextSearch = true;
+        } else if (confianca > 0.4) {
+          console.log("⚠️ Confiança MÉDIA no texto extraído. Tentaremos busca por texto, mas com plano de contingência.");
+          shouldUseTextSearch = true;
+        } else {
+          console.log("⚠️ Confiança BAIXA no texto extraído. Ignorando texto e usando apenas busca VISUAL.");
+          shouldUseTextSearch = false;
+        }
+      } else {
+        // Verificar o formato antigo por compatibilidade
+        if (extractedTextInfo.detalhes?.nome_exato || extractedTextInfo.detalhes?.nome) {
+          productNameFromText = extractedTextInfo.detalhes?.nome_exato || extractedTextInfo.detalhes?.nome;
+          console.log("💡 Nome de produto extraído do formato antigo:", productNameFromText);
+          
+          // Como não temos confiança, vamos tratar como confiança média
+          console.log("⚠️ Formato antigo sem informação de confiança. Considerando como média confiança.");
+          shouldUseTextSearch = true;
+        } else {
+          console.log("ℹ️ Nenhum texto visível relevante detectado na imagem. Usando apenas busca VISUAL.");
+        }
+      }
+      
+      // PRIORIDADE: Busca por texto quando temos um nome de produto extraído de texto visível
+      if (shouldUseTextSearch && productNameFromText) {
         try {
           textSearchAttempted = true;
           console.log("🔍 PRIORIDADE: Realizando busca por texto com o nome extraído...");
@@ -269,7 +298,11 @@ export async function get_products_info_by_image(imageUrl, extractedTextInfo = n
           console.log("⚠️ Continuando com busca visual como fallback.");
         }
       } else {
-        console.log("ℹ️ Produto detectado, mas sem nome específico. Usando busca visual.");
+        if (productNameFromText) {
+          console.log("ℹ️ Texto extraído com confiança baixa, ignorando e usando apenas busca visual.");
+        } else {
+          console.log("ℹ️ Produto detectado, mas sem nome específico. Usando busca visual.");
+        }
       }
     } else {
       console.log("ℹ️ Nenhuma informação de texto extraída disponível. Usando apenas busca visual.");
