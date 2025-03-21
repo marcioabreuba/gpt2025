@@ -29,93 +29,128 @@ export async function downloadImage(url) {
       fs.mkdirSync(tempDir, { recursive: true });
     }
     
-    const writer = fs.createWriteStream(imagePath);
-    
-    // Configurando cabeçalhos para autenticação no Z-API
-    const headers = {};
-    
-    // Adicionar Client-Token da Z-API para autenticação
-    if (config.zapi.clientToken) {
-      headers['Client-Token'] = config.zapi.clientToken;
-    }
-    
-    // Determinar o tipo de URL para escolher a estratégia adequada
-    let finalUrl = url;
-    
-    // Para URLs do backblaze (storage da Z-API) pode ser necessário um token adicional
+    // Determinar se é uma URL do Backblaze/Z-API
     if (url.includes('backblazeb2.com') || url.includes('temp-file-download')) {
-      console.log("🔄 Detectada URL do Backblaze/Z-API, ajustando método de download...");
+      console.log("🔄 Detectada URL de mídia do Z-API, usando método direto...");
       
-      // Extrair o ID da mídia da URL
-      const urlParts = url.split('/');
-      const filenamePart = urlParts[urlParts.length - 1];
-      let mediaId;
-      
-      // Tentar diferentes formatos de URLs do Z-API
-      if (filenamePart.includes('==.')) {
-        mediaId = filenamePart.split('==.')[0] + '==';
-      } else if (filenamePart.includes('==')) {
-        mediaId = filenamePart;
-      } else {
-        // Se não conseguir extrair o ID, usar a URL original
-        mediaId = filenamePart;
-      }
-      
-      console.log("🔑 ID de mídia extraído:", mediaId);
-      
-      // Construir URL do Z-API para download de mídia
-      finalUrl = `https://api.z-api.io/instances/${config.zapi.instanceId}/token/${config.zapi.token}/media/${mediaId}`;
-      console.log("🔄 URL reformatada para API Z-API:", finalUrl);
-      
-      // Adicionar headers específicos para o Z-API
-      if (config.zapi.clientToken) {
-        headers['Client-Token'] = config.zapi.clientToken;
-      }
-    }
-    
-    console.log("🔄 Realizando download com headers:", JSON.stringify(headers));
-    
-    try {
-      // Tentar baixar a imagem com axios
-      const response = await axios({
-        url: finalUrl,
-        method: 'GET',
-        responseType: 'stream',
-        headers,
-        timeout: 30000,  // 30 segundos timeout
-        maxContentLength: 50 * 1024 * 1024,  // 50MB limite
-      });
-      
-      response.data.pipe(writer);
-      
-      return new Promise((resolve, reject) => {
-        writer.on('finish', () => {
-          console.log("✅ Download concluído com sucesso:", imagePath);
-          resolve(imagePath);
+      // MÉTODO 1: Direto do servidor de mídia Backblaze
+      try {
+        console.log("🔄 Tentativa 1: Download direto da Backblaze");
+        const response = await axios({
+          url: url,
+          method: 'GET',
+          responseType: 'arraybuffer',
+          headers: {
+            'Accept': 'image/*'
+          },
+          timeout: 30000,
         });
-        writer.on('error', (err) => {
-          console.error("❌ Erro ao escrever arquivo:", err);
-          reject(err);
-        });
-      });
-    } catch (axiosError) {
-      // Se falhar com axios, tentar uma abordagem alternativa com fetch
-      console.warn("⚠️ Falha no download com axios, tentando com fetch:", axiosError.message);
-      
-      const fetchResponse = await fetch(finalUrl, {
-        method: 'GET',
-        headers
-      });
-      
-      if (!fetchResponse.ok) {
-        throw new Error(`Erro HTTP: ${fetchResponse.status} - ${fetchResponse.statusText}`);
+        
+        // Verificar se recebemos dados de imagem
+        if (response.data && response.data.length > 1000) {  // mínimo de 1KB
+          fs.writeFileSync(imagePath, Buffer.from(response.data));
+          console.log(`✅ Download direto bem-sucedido (${response.data.length} bytes)`);
+          return imagePath;
+        } else {
+          console.log(`⚠️ Resposta muito pequena: ${response.data?.length || 0} bytes`);
+          throw new Error("Arquivo de mídia recebido muito pequeno");
+        }
+      } catch (error) {
+        console.warn("⚠️ Falha no download direto:", error.message);
+        // Continuar para o próximo método
       }
       
-      const buffer = await fetchResponse.arrayBuffer();
-      fs.writeFileSync(imagePath, Buffer.from(buffer));
-      console.log("✅ Download concluído com sucesso (via fetch):", imagePath);
+      // MÉTODO 2: Através da API Z-API usando mediaId
+      try {
+        console.log("🔄 Tentativa 2: Download via API Z-API");
+        
+        // Extrair o mediaId da URL
+        let mediaId;
+        const urlParts = url.split('/');
+        const filename = urlParts[urlParts.length - 1];
+        
+        if (filename.includes('==.')) {
+          mediaId = filename.split('==.')[0] + '==';
+        } else if (filename.includes('==')) {
+          mediaId = filename;
+        } else {
+          mediaId = filename.replace(/\.[^/.]+$/, ""); // Remove extensões
+        }
+        
+        console.log("🔑 MediaID extraído:", mediaId);
+        
+        // URL da API Z-API
+        const apiUrl = `https://api.z-api.io/instances/${config.zapi.instanceId}/token/${config.zapi.token}/media/${mediaId}`;
+        console.log("🌐 URL da API Z-API:", apiUrl);
+        
+        const response = await axios({
+          url: apiUrl,
+          method: 'GET',
+          responseType: 'arraybuffer',
+          headers: {
+            'Client-Token': config.zapi.clientToken
+          },
+          timeout: 30000
+        });
+        
+        // Verificar se recebemos dados de imagem
+        if (response.data && response.data.length > 1000) {
+          fs.writeFileSync(imagePath, Buffer.from(response.data));
+          console.log(`✅ Download via Z-API bem-sucedido (${response.data.length} bytes)`);
+          return imagePath;
+        } else {
+          console.log(`⚠️ Resposta muito pequena: ${response.data?.length || 0} bytes`);
+          throw new Error("Arquivo de mídia recebido muito pequeno");
+        }
+      } catch (error) {
+        console.warn("⚠️ Falha no download via Z-API:", error.message);
+        // Continuar para o próximo método
+      }
       
-      return imagePath;
+      // MÉTODO 3: Último recurso - usar fetch com URL raw
+      try {
+        console.log("🔄 Tentativa 3: Download via fetch como último recurso");
+        
+        const response = await fetch(url);
+        if (!response.ok) {
+          throw new Error(`Erro HTTP: ${response.status} - ${response.statusText}`);
+        }
+        
+        const buffer = await response.arrayBuffer();
+        if (buffer.byteLength < 1000) {
+          throw new Error(`Arquivo muito pequeno: ${buffer.byteLength} bytes`);
+        }
+        
+        fs.writeFileSync(imagePath, Buffer.from(buffer));
+        console.log(`✅ Download via fetch bem-sucedido (${buffer.byteLength} bytes)`);
+        return imagePath;
+      } catch (error) {
+        console.error("❌ Todas as tentativas de download falharam:", error.message);
+        throw new Error("Falha em todos os métodos de download");
+      }
+    } else {
+      // URL normal (não Z-API)
+      console.log("🔄 URL normal detectada, usando método padrão");
+      
+      try {
+        const response = await axios({
+          url: url,
+          method: 'GET',
+          responseType: 'arraybuffer',
+          timeout: 30000
+        });
+        
+        if (response.data && response.data.length > 1000) {
+          fs.writeFileSync(imagePath, Buffer.from(response.data));
+          console.log(`✅ Download padrão bem-sucedido (${response.data.length} bytes)`);
+          return imagePath;
+        } else {
+          throw new Error(`Arquivo muito pequeno: ${response.data?.length || 0} bytes`);
+        }
+      } catch (error) {
+        console.error("❌ Erro no download padrão:", error.message);
+        throw error;
+      }
     }
   } catch (error) {
     console.error('❌ ERRO FATAL no download da imagem:', error);
@@ -168,6 +203,17 @@ export async function analyzeImageContent(imagePath) {
     console.log("🔍 INÍCIO: Analisando conteúdo da imagem com GPT-4o...");
     console.log("📄 Imagem sendo analisada:", imagePath);
     
+    // Verificar se o arquivo existe e é válido
+    try {
+      const stats = fs.statSync(imagePath);
+      if (stats.size < 1000) { // Mínimo de 1KB para ser uma imagem válida
+        throw new Error(`Arquivo de imagem muito pequeno (${stats.size} bytes). Provavelmente corrompido.`);
+      }
+    } catch (fileError) {
+      console.error("❌ Erro ao verificar arquivo:", fileError.message);
+      throw new Error("Arquivo de imagem inválido ou inacessível");
+    }
+    
     // Processar e converter a imagem para um formato compatível (JPEG)
     try {
       // Criar nome para imagem processada
@@ -180,10 +226,60 @@ export async function analyzeImageContent(imagePath) {
         .toFile(processedImagePath);
         
       console.log("✅ Imagem convertida com sucesso para:", processedImagePath);
+      
+      // Verificar se a imagem processada é válida
+      const processedStats = fs.statSync(processedImagePath);
+      if (processedStats.size < 1000) {
+        throw new Error(`Imagem processada muito pequena (${processedStats.size} bytes)`);
+      }
     } catch (conversionError) {
       console.error("⚠️ Erro na conversão da imagem:", conversionError);
       console.log("⚠️ Usando imagem original sem conversão");
       processedImagePath = imagePath; // Usar a original se a conversão falhar
+    }
+    
+    // MÉTODO ALTERNATIVO: Se a imagem original for URL do Backblaze, usar URL diretamente
+    if (processedImagePath === imagePath && (imagePath.includes('backblaze') || imagePath.includes('temp-file-download'))) {
+      console.log("🔄 Tentando usar a URL da imagem diretamente com a API OpenAI...");
+      
+      // Se a imagem local falhou e é do tipo URL externa, tentar usar URL diretamente
+      try {
+        // Aqui usamos a URL diretamente em vez da imagem local
+        const imageUrl = imagePath;
+        const messages = [
+          {
+            role: "user",
+            content: [
+              { 
+                type: "text", 
+                text: "Analise esta imagem com ATENÇÃO ESPECIAL a qualquer TEXTO ou NOME visível nela. Identifique se é: 1) Um produto (qual categoria e NOME EXATO do produto se visível na imagem), 2) Um comprovante de pagamento (extraia data, valor e ID), ou 3) Outro tipo. Se for um produto, busque cuidadosamente qualquer nome ou identificador do produto que esteja escrito/impresso na imagem. Retorne em formato JSON com a estrutura: {tipo: 'produto|comprovante|outro', detalhes: {...}}" 
+              },
+              { 
+                type: "image_url", 
+                image_url: { url: imageUrl } 
+              }
+            ]
+          }
+        ];
+        
+        console.log("📤 Enviando URL da imagem para análise com GPT-4o...");
+        
+        const response = await openai.chat.completions.create({
+          model: "gpt-4o",
+          messages,
+          response_format: { type: "json_object" }
+        });
+        
+        console.log("📥 Resposta recebida do GPT-4o via URL");
+        
+        const analysisResult = JSON.parse(response.choices[0]?.message?.content || '{"tipo":"outro"}');
+        
+        console.log(`🏷️ Tipo de conteúdo identificado via URL: ${analysisResult.tipo}`);
+        return analysisResult;
+      } catch (urlAnalysisError) {
+        console.error("❌ Erro ao analisar imagem via URL:", urlAnalysisError);
+        throw new Error("Falha no processamento da imagem, tanto local quanto via URL");
+      }
     }
     
     // Usar a imagem processada

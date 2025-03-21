@@ -9,19 +9,27 @@ export async function processImage(imageUrl) {
     console.log("🔗 URL da imagem recebida:", imageUrl);
     
     // Primeiro, vamos tentar analisar o conteúdo da imagem para extrair texto
-    let imagePath;
+    let imagePath = null;
     let textAnalysis = null;
     let textExtractionSuccess = false;
     
     try {
       // Baixar a imagem com tratamento de erro aprimorado
-      imagePath = await downloadImage(imageUrl);
-      console.log("📥 Imagem baixada com sucesso em:", imagePath);
-      
-      // Verificar se o arquivo existe e tem tamanho válido
-      const stats = fs.statSync(imagePath);
-      if (stats.size < 100) { // Se arquivo for muito pequeno, provavelmente está corrompido
-        throw new Error(`Arquivo de imagem inválido ou muito pequeno: ${stats.size} bytes`);
+      try {
+        imagePath = await downloadImage(imageUrl);
+        console.log("📥 Imagem baixada com sucesso em:", imagePath);
+        
+        // Verificar se o arquivo tem tamanho válido
+        const stats = fs.statSync(imagePath);
+        if (stats.size < 1000) { // Se arquivo for muito pequeno
+          console.warn(`⚠️ Arquivo de imagem baixado é muito pequeno: ${stats.size} bytes. Pode estar corrompido.`);
+        }
+      } catch (downloadError) {
+        console.error("❌ Erro ao baixar imagem:", downloadError.message);
+        // Não abortar, tentar analisar diretamente com a URL
+        console.log("🔍 Tentando analisar a imagem diretamente pela URL");
+        // Nesse caso, passamos a URL como imagePath
+        imagePath = imageUrl;
       }
       
       // Tentar extrair texto/informações da imagem usando GPT-4o
@@ -43,8 +51,8 @@ export async function processImage(imageUrl) {
       console.error("❌ Erro ao analisar texto da imagem:", error.message);
       console.log("⚠️ Prosseguindo com busca visual mesmo assim");
     } finally {
-      // Limpar arquivo temporário
-      if (imagePath && fs.existsSync(imagePath)) {
+      // Limpar arquivo temporário somente se não for a URL original
+      if (imagePath && imagePath !== imageUrl && fs.existsSync(imagePath)) {
         try {
           fs.unlinkSync(imagePath);
           console.log("🧹 Arquivo temporário de imagem removido");

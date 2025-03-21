@@ -223,7 +223,28 @@ export async function get_products_info_by_image(imageUrl, extractedTextInfo = n
         // Se temos um nome de produto do texto, podemos tentar buscar diretamente
         try {
           console.log("🔍 Tentando busca por texto com o nome extraído...");
-          const textResults = await get_products_info([productNameFromText]);
+          
+          // Usar múltiplas estratégias de busca para melhorar a chance de encontrar
+          // 1. Nome completo
+          // 2. Palavras-chave principais (3-4 primeiras palavras)
+          // 3. Termos alternativos baseados na categoria
+          
+          const searchTerms = [productNameFromText];
+          
+          // Adicionar palavras-chave principais
+          const keywords = productNameFromText.split(' ').slice(0, 4).join(' ');
+          if (keywords !== productNameFromText) {
+            searchTerms.push(keywords);
+          }
+          
+          // Adicionar termos alternativos baseados na categoria
+          if (extractedTextInfo.detalhes?.categoria) {
+            searchTerms.push(`${extractedTextInfo.detalhes.categoria} ${keywords}`);
+          }
+          
+          console.log("🔤 Termos de busca gerados:", searchTerms);
+          
+          const textResults = await get_products_info(searchTerms);
           
           if (textResults && !textResults.error && textResults.length > 20) {
             console.log("✅ Busca por texto bem-sucedida! Usando resultados do texto.");
