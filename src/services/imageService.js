@@ -6,6 +6,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import config from '../config.js';
 import OpenAI from "openai";
+import sharp from 'sharp'; // Importar a biblioteca Sharp
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -19,6 +20,7 @@ const openai = new OpenAI({ apiKey: config.openai.apiKey });
  */
 export async function downloadImage(url) {
   try {
+    console.log("📥 Iniciando download da imagem de:", url);
     const imagePath = path.join(__dirname, `../temp/image_${Date.now()}.jpg`);
     
     // Garantir que a pasta temp existe
@@ -37,34 +39,87 @@ export async function downloadImage(url) {
       headers['Client-Token'] = config.zapi.clientToken;
     }
     
+    // Determinar o tipo de URL para escolher a estratégia adequada
+    let finalUrl = url;
+    
     // Para URLs do backblaze (storage da Z-API) pode ser necessário um token adicional
-    // Se o url contém backblazeb2.com ou temp-file-download
     if (url.includes('backblazeb2.com') || url.includes('temp-file-download')) {
-      // Pode ser necessário usar um token específico dependendo da configuração do Z-API
-      // headers['Authorization'] = `Bearer ${config.zapi.token}`;
+      console.log("🔄 Detectada URL do Backblaze/Z-API, ajustando método de download...");
       
-      // Ou, alternativamente, tentar acessar através da API do Z-API
-      // Modificar a URL para usar o endpoint de mídia do Z-API
-      const mediaId = url.split('/').pop().split('==.')[0] + '==';
-      url = `https://api.z-api.io/instances/${config.zapi.instanceId}/token/${config.zapi.token}/media/${mediaId}`;
+      // Extrair o ID da mídia da URL
+      const urlParts = url.split('/');
+      const filenamePart = urlParts[urlParts.length - 1];
+      let mediaId;
+      
+      // Tentar diferentes formatos de URLs do Z-API
+      if (filenamePart.includes('==.')) {
+        mediaId = filenamePart.split('==.')[0] + '==';
+      } else if (filenamePart.includes('==')) {
+        mediaId = filenamePart;
+      } else {
+        // Se não conseguir extrair o ID, usar a URL original
+        mediaId = filenamePart;
+      }
+      
+      console.log("🔑 ID de mídia extraído:", mediaId);
+      
+      // Construir URL do Z-API para download de mídia
+      finalUrl = `https://api.z-api.io/instances/${config.zapi.instanceId}/token/${config.zapi.token}/media/${mediaId}`;
+      console.log("🔄 URL reformatada para API Z-API:", finalUrl);
+      
+      // Adicionar headers específicos para o Z-API
+      if (config.zapi.clientToken) {
+        headers['Client-Token'] = config.zapi.clientToken;
+      }
     }
     
-    const response = await axios({
-      url,
-      method: 'GET',
-      responseType: 'stream',
-      headers
-    });
+    console.log("🔄 Realizando download com headers:", JSON.stringify(headers));
     
-    response.data.pipe(writer);
-    
-    return new Promise((resolve, reject) => {
-      writer.on('finish', () => resolve(imagePath));
-      writer.on('error', reject);
-    });
+    try {
+      // Tentar baixar a imagem com axios
+      const response = await axios({
+        url: finalUrl,
+        method: 'GET',
+        responseType: 'stream',
+        headers,
+        timeout: 30000,  // 30 segundos timeout
+        maxContentLength: 50 * 1024 * 1024,  // 50MB limite
+      });
+      
+      response.data.pipe(writer);
+      
+      return new Promise((resolve, reject) => {
+        writer.on('finish', () => {
+          console.log("✅ Download concluído com sucesso:", imagePath);
+          resolve(imagePath);
+        });
+        writer.on('error', (err) => {
+          console.error("❌ Erro ao escrever arquivo:", err);
+          reject(err);
+        });
+      });
+    } catch (axiosError) {
+      // Se falhar com axios, tentar uma abordagem alternativa com fetch
+      console.warn("⚠️ Falha no download com axios, tentando com fetch:", axiosError.message);
+      
+      const fetchResponse = await fetch(finalUrl, {
+        method: 'GET',
+        headers
+      });
+      
+      if (!fetchResponse.ok) {
+        throw new Error(`Erro HTTP: ${fetchResponse.status} - ${fetchResponse.statusText}`);
+      }
+      
+      const buffer = await fetchResponse.arrayBuffer();
+      fs.writeFileSync(imagePath, Buffer.from(buffer));
+      console.log("✅ Download concluído com sucesso (via fetch):", imagePath);
+      
+      return imagePath;
+    }
   } catch (error) {
-    console.error('Erro ao baixar imagem:', error);
-    throw new Error('Falha no download da imagem');
+    console.error('❌ ERRO FATAL no download da imagem:', error);
+    throw new Error(`Falha no download da imagem: ${error.message}`);
   }
 }
 
@@ -107,11 +162,32 @@ export async function describeImage(imagePath, caption = '') {
  * @returns {Promise<Object>} - Tipo de imagem e detalhes identificados.
  */
 export async function analyzeImageContent(imagePath) {
+  let processedImagePath = null;
+  
   try {
     console.log("🔍 INÍCIO: Analisando conteúdo da imagem com GPT-4o...");
     console.log("📄 Imagem sendo analisada:", imagePath);
     
-    const imageBuffer = fs.readFileSync(imagePath);
+    // Processar e converter a imagem para um formato compatível (JPEG)
+    try {
+      // Criar nome para imagem processada
+      processedImagePath = path.join(__dirname, `../temp/processed_${Date.now()}.jpg`);
+      console.log("🔄 Convertendo imagem para formato compatível...");
+      
+      // Usar Sharp para converter para JPEG
+      await sharp(imagePath)
+        .jpeg({ quality: 90 })
+        .toFile(processedImagePath);
+        
+      console.log("✅ Imagem convertida com sucesso para:", processedImagePath);
+    } catch (conversionError) {
+      console.error("⚠️ Erro na conversão da imagem:", conversionError);
+      console.log("⚠️ Usando imagem original sem conversão");
+      processedImagePath = imagePath; // Usar a original se a conversão falhar
+    }
+    
+    // Usar a imagem processada
+    const imageBuffer = fs.readFileSync(processedImagePath);
     const base64Image = imageBuffer.toString('base64');
     
     // Usando um prompt específico para identificar o tipo de imagem e extrair texto visível
@@ -169,6 +245,16 @@ export async function analyzeImageContent(imagePath) {
   } catch (error) {
     console.error('❌ Erro ao analisar conteúdo da imagem:', error);
     return { tipo: "erro", detalhes: error.message };
+  } finally {
+    // Limpar imagem processada se diferente da original
+    if (processedImagePath && processedImagePath !== imagePath && fs.existsSync(processedImagePath)) {
+      try {
+        fs.unlinkSync(processedImagePath);
+        console.log("🧹 Arquivo temporário de conversão removido");
+      } catch (cleanupError) {
+        console.error("⚠️ Erro ao remover arquivo temporário:", cleanupError);
+      }
+    }
   }
 }
 

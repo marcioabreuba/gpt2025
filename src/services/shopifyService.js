@@ -210,10 +210,34 @@ export async function get_products_info_by_image(imageUrl, extractedTextInfo = n
     console.log("🖼️ INÍCIO: Busca por similaridade visual de imagem");
     logger.debug("ImageUrl", imageUrl);
     
-    // Log de informações de texto extraídas (se disponíveis)
-    if (extractedTextInfo) {
+    // Verificar se há informações de texto extraídas para usar na busca
+    let productNameFromText = null;
+    if (extractedTextInfo && extractedTextInfo.tipo === 'produto') {
       console.log("📝 Informações de texto extraídas disponíveis:", JSON.stringify(extractedTextInfo, null, 2));
-      // Futura implementação: utilizar o texto extraído para melhorar a busca
+      
+      // Extrair nome do produto se disponível
+      if (extractedTextInfo.detalhes?.nome) {
+        productNameFromText = extractedTextInfo.detalhes.nome;
+        console.log("💡 Nome de produto extraído do texto:", productNameFromText);
+        
+        // Se temos um nome de produto do texto, podemos tentar buscar diretamente
+        try {
+          console.log("🔍 Tentando busca por texto com o nome extraído...");
+          const textResults = await get_products_info([productNameFromText]);
+          
+          if (textResults && !textResults.error && textResults.length > 20) {
+            console.log("✅ Busca por texto bem-sucedida! Usando resultados do texto.");
+            return textResults;
+          } else {
+            console.log("⚠️ Busca por texto não retornou resultados satisfatórios. Continuando com busca visual.");
+          }
+        } catch (textSearchError) {
+          console.error("⚠️ Erro na busca por texto:", textSearchError);
+          console.log("⚠️ Continuando com busca visual como fallback.");
+        }
+      } else {
+        console.log("ℹ️ Produto detectado, mas sem nome específico. Usando busca visual.");
+      }
     } else {
       console.log("ℹ️ Nenhuma informação de texto extraída disponível. Usando apenas busca visual.");
     }
