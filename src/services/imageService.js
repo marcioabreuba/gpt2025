@@ -252,7 +252,7 @@ export async function analyzeImageContent(imagePath) {
             content: [
               { 
                 type: "text", 
-                text: "Analise esta imagem com ATENÇÃO ESPECIAL a qualquer TEXTO ou NOME visível nela. Identifique se é: 1) Um produto (qual categoria e NOME EXATO do produto se visível na imagem), 2) Um comprovante de pagamento (extraia data, valor e ID), ou 3) Outro tipo. Se for um produto, busque cuidadosamente qualquer nome ou identificador do produto que esteja escrito/impresso na imagem. Retorne em formato JSON com a estrutura: {tipo: 'produto|comprovante|outro', detalhes: {...}}" 
+                text: "Analise esta imagem com ATENÇÃO ESPECIAL a qualquer TEXTO ou NOME visível nela. Identifique se é: 1) Um produto (qual categoria e NOME EXATO do produto se visível na imagem), 2) Um comprovante de pagamento (extraia data, valor e ID), ou 3) Outro tipo. Se for um produto, busque cuidadosamente qualquer nome ou identificador do produto que esteja escrito/impresso na imagem. Retorne em formato JSON com a estrutura: {tipo: 'produto|comprovante|outro', detalhes: {nome_exato: 'nome do produto se encontrado', categoria: 'tipo de produto', descricao: 'descrição breve se visível'}}" 
               },
               { 
                 type: "image_url", 
@@ -293,7 +293,7 @@ export async function analyzeImageContent(imagePath) {
         content: [
           { 
             type: "text", 
-            text: "Analise esta imagem com ATENÇÃO ESPECIAL a qualquer TEXTO ou NOME visível nela. Identifique se é: 1) Um produto (qual categoria e NOME EXATO do produto se visível na imagem), 2) Um comprovante de pagamento (extraia data, valor e ID), ou 3) Outro tipo. Se for um produto, busque cuidadosamente qualquer nome ou identificador do produto que esteja escrito/impresso na imagem. Retorne em formato JSON com a estrutura: {tipo: 'produto|comprovante|outro', detalhes: {...}}" 
+            text: "Analise esta imagem com ATENÇÃO ESPECIAL a qualquer TEXTO ou NOME visível nela. Identifique se é: 1) Um produto (qual categoria e NOME EXATO do produto se visível na imagem), 2) Um comprovante de pagamento (extraia data, valor e ID), ou 3) Outro tipo. Se for um produto, busque cuidadosamente qualquer nome ou identificador do produto que esteja escrito/impresso na imagem. Retorne em formato JSON com a estrutura: {tipo: 'produto|comprovante|outro', detalhes: {nome_exato: 'nome do produto se encontrado', categoria: 'tipo de produto', descricao: 'descrição breve se visível'}}" 
           },
           { 
             type: "image_url", 
@@ -322,17 +322,25 @@ export async function analyzeImageContent(imagePath) {
     if (analysisResult.tipo === "produto") {
       console.log("🛍️ PRODUTO DETECTADO nas seguintes informações:");
       console.log("📝 Categoria:", analysisResult.detalhes?.categoria || "Não especificada");
-      console.log("📝 Nome do produto:", analysisResult.detalhes?.nome || "Não encontrado");
+      
+      // Verificar nome_exato primeiro, depois nome regular
+      const productName = analysisResult.detalhes?.nome_exato || analysisResult.detalhes?.nome || null;
+      console.log("📝 Nome do produto:", productName || "Não encontrado");
       console.log("📝 Descrição:", analysisResult.detalhes?.descricao || "Não disponível");
       
       // Adicionar campo de nome para compatibilidade se não existir
-      if (!analysisResult.detalhes.nome && analysisResult.detalhes.descricao) {
+      if (!productName && analysisResult.detalhes.descricao) {
         // Verificar se a descrição parece conter um nome de produto
         const possibleName = analysisResult.detalhes.descricao.split('.')[0].trim();
         if (possibleName.length < 50) { // Se for curto o suficiente para ser um nome
           console.log("🔄 Extraindo possível nome do produto da descrição:", possibleName);
           analysisResult.detalhes.nome = possibleName;
         }
+      }
+      
+      // Garantir que temos um campo nome_exato para consistência
+      if (!analysisResult.detalhes.nome_exato && productName) {
+        analysisResult.detalhes.nome_exato = productName;
       }
     }
     

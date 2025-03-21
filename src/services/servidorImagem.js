@@ -41,8 +41,10 @@ export async function processImage(imageUrl) {
         textExtractionSuccess = true;
         
         // Ver se há nome de produto na análise
-        if (textAnalysis.tipo === 'produto' && textAnalysis.detalhes?.nome) {
-          console.log("✅ NOME DE PRODUTO ENCONTRADO NO TEXTO:", textAnalysis.detalhes.nome);
+        if (textAnalysis.tipo === 'produto' && (textAnalysis.detalhes?.nome_exato || textAnalysis.detalhes?.nome)) {
+          const productName = textAnalysis.detalhes?.nome_exato || textAnalysis.detalhes?.nome;
+          console.log("✅ NOME DE PRODUTO ENCONTRADO NO TEXTO:", productName);
+          console.log("🔍 Este nome será usado prioritariamente na busca de produtos");
         }
       } else {
         console.log("⚠️ Análise de texto falhou, mas continuaremos com busca visual");
@@ -63,25 +65,28 @@ export async function processImage(imageUrl) {
     }
 
     // Busca produtos similares na imagem (usando embeddings visuais)
-    console.log("🔍 Iniciando busca por similaridade visual...");
-    const visualSearchResults = await get_products_info_by_image(imageUrl, textAnalysis);
-    console.log("🎯 RESULTADO FINAL DA BUSCA VISUAL:", 
-              visualSearchResults.substring(0, 150) + 
-              (visualSearchResults.length > 150 ? "..." : ""));
+    console.log("🔍 Iniciando busca por produtos...");
+    const searchResults = await get_products_info_by_image(imageUrl, textAnalysis);
+    console.log("🎯 RESULTADO FINAL DA BUSCA:", 
+              searchResults.substring(0, 150) + 
+              (searchResults.length > 150 ? "..." : ""));
     
     // Comparar resultado de busca visual com análise de texto (se disponível)
     if (textExtractionSuccess && textAnalysis.tipo === 'produto') {
-      console.log("⚖️ COMPARAÇÃO: Texto extraído vs. Busca visual");
-      console.log("📝 Texto sugeriu:", textAnalysis.detalhes?.nome || textAnalysis.detalhes?.descricao || "N/A");
-      console.log("🖼️ Busca visual encontrou produto com título que contém:", 
-                  visualSearchResults.includes("Título:") ? 
-                  visualSearchResults.split("Título:")[1].split(".")[0] : "Não encontrado");
+      const productName = textAnalysis.detalhes?.nome_exato || textAnalysis.detalhes?.nome;
+      console.log("⚖️ COMPARAÇÃO: Texto extraído vs. Resultado final");
+      console.log("📝 Texto extraído sugeriu:", productName || "N/A");
       
-      // TODO: Futura implementação - combinar resultados de texto e visual para melhorar a precisão
+      // Verificar se o resultado contém a indicação de busca por texto bem-sucedida
+      if (searchResults.includes("🏷️ Produto identificado pelo nome:")) {
+        console.log("✅ SUCESSO: Produto encontrado usando o nome extraído do texto");
+      } else if (searchResults.includes("🖼️ Produto similar encontrado por BUSCA VISUAL")) {
+        console.log("ℹ️ Nome extraído não encontrou resultados, mas busca visual encontrou similares");
+      }
     }
     
     console.log("🏁 FIM DO PROCESSAMENTO - servidorImagem.js");
-    return visualSearchResults;
+    return searchResults;
   } catch (error) {
     console.error('❌ ERRO GERAL no processamento da imagem:', error);
     logger.error('Erro detalhado no processamento de imagem:', error);
