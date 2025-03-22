@@ -43,7 +43,7 @@ import ordersRoutes from './routes/orders.js';
 import pedidosRoutes from './routes/api/pedidos.js';
 import produtosRoutes from './routes/api/produtos.js';
 import trueRoutes from './routes/api/true.js';
-
+import callcenterRoutes from './routes/api/callcenter/buscarpedidos.js';
 // Inicialização do Express
 const app = express();
 const prisma = new PrismaClient();
@@ -80,7 +80,8 @@ async function startServer() {
   app.use('/api', pedidosRoutes);
   app.use('/api', produtosRoutes);
   app.use('/api', trueRoutes);
-  
+  app.use('/api/callcenter', callcenterRoutes);
+
   // Endpoint de emergência para reset do estado de processamento
   app.post('/api/reset', (req, res) => {
     try {

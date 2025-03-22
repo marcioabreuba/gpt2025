@@ -5,3 +5,7 @@ Content-Type: application/json
 ### Teste de GET Orders
 POST http://localhost:3000/api/true
 Content-Type: application/json
+
+### Teste da rota de pedidos do callcenter
+POST http://localhost:3000/api/callcenter/buscarpedidos
+Content-Type: application/json
