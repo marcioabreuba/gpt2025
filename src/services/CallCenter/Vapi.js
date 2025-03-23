@@ -7,8 +7,7 @@ class VapiService {
             }
 
             // Log do início do processamento
-            console.log('Iniciando processamento do pedido no serviço Vapi:', pedido.message.toolCalls);
-            console.log('Iniciando processamento do pedido no serviço Vapi:', pedido.message.toolCallList);
+            console.log('Iniciando processamento do pedido no serviço Vapi:', pedido.message.toolCalls[0].function.arguments);
 
             // Aqui você pode implementar a lógica específica do serviço Vapi
             // Por exemplo:
