@@ -7,6 +7,7 @@ class PineconeService {
     constructor() {
         this.pc = new Pinecone({ apiKey: config.pinecone.apiKey });
         this.indexName = config.pinecone.index;
+        this.cache = new Map(); // Cache para produtos já buscados
     }
 
     async initialize() {
@@ -42,18 +43,36 @@ class PineconeService {
 
             console.log(`Encontrados ${produtosFiltrados.length} produtos similares para: ${nomeProduto}`);
             
+            // Buscar detalhes dos produtos únicos
             const produtosComDetalhes = await Promise.all(
                 produtosFiltrados.map(async (produto) => {
                     if (produto.metadata.productId) {
-                        const detalhes = await buscarProdutoPorId(produto.metadata.productId);
-                        if (detalhes) {
+                        // Verificar se já temos o produto no cache
+                        if (this.cache.has(produto.metadata.productId)) {
                             return {
                                 ...produto,
                                 metadata: {
                                     ...produto.metadata,
-                                    price: detalhes.price,
-                                    available: true,
-                                    url: detalhes.public_url
+                                    ...this.cache.get(produto.metadata.productId)
+                                }
+                            };
+                        }
+
+                        const detalhes = await buscarProdutoPorId(produto.metadata.productId);
+                        if (detalhes) {
+                            const detalhesProduto = {
+                                price: detalhes.price,
+                                available: true,
+                                url: detalhes.public_url
+                            };
+                            // Salvar no cache
+                            this.cache.set(produto.metadata.productId, detalhesProduto);
+                            
+                            return {
+                                ...produto,
+                                metadata: {
+                                    ...produto.metadata,
+                                    ...detalhesProduto
                                 }
                             };
                         }
