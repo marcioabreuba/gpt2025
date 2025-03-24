@@ -1,5 +1,4 @@
 import PineconeService from './PineconeService.js';
-import logger from '../../utils/logger.js';
 
 class VapiService {
     static async processarPedido(pedido) {
@@ -10,7 +9,7 @@ class VapiService {
             }
 
             // Log do início do processamento
-            logger.info('Iniciando processamento do pedido no serviço Vapi:', pedido.message.toolCalls[0].function.arguments);
+            console.log('Iniciando processamento do pedido no serviço Vapi:', pedido.message.toolCalls[0].function.arguments);
 
             // Aqui você pode implementar a lógica específica do serviço Vapi
             // Por exemplo:
@@ -22,10 +21,10 @@ class VapiService {
             // Simulação de processamento
             await new Promise(resolve => setTimeout(resolve, 1000));
             
-            logger.info('Pedido processado com sucesso no serviço Vapi');
+            console.log('Pedido processado com sucesso no serviço Vapi');
             return true;
         } catch (error) {
-            logger.error('Erro no processamento do pedido no serviço Vapi:', error);
+            console.error('Erro no processamento do pedido no serviço Vapi:', error);
             throw error;
         }
     }
@@ -38,7 +37,7 @@ class VapiService {
             }
 
             // Log do início do processamento
-            logger.info('Iniciando busca de produtos no serviço Vapi:', requisicao.message.toolCalls[0].function.arguments);
+            console.log('Iniciando busca de produtos no serviço Vapi:', requisicao.message.toolCalls[0].function.arguments);
 
             // Extrair o nome do produto da requisição
             const { Produto } = JSON.parse(requisicao.message.toolCalls[0].function.arguments);
@@ -46,7 +45,7 @@ class VapiService {
             // Buscar produtos similares no Pinecone
             const produtosSimilares = await PineconeService.buscarProdutosSimilares(Produto);
             
-            logger.info('Produto processado com sucesso no serviço Vapi');
+            console.log('Produto processado com sucesso no serviço Vapi');
             
             // Formatar a resposta para a Vapi
             const resposta = {
@@ -63,11 +62,11 @@ class VapiService {
             };
 
             // Log da resposta formatada
-            logger.debug('Resposta formatada para a Vapi:', resposta);
+            console.log('Resposta formatada para a Vapi:', resposta);
             
             return resposta;
         } catch (error) {
-            logger.error('Erro na busca de produtos no serviço Vapi:', error);
+            console.error('Erro na busca de produtos no serviço Vapi:', error);
             throw error;
         }
     }
