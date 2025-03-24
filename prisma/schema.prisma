@@ -29,3 +29,53 @@ model QueueTraining {
   updatedAt DateTime @default(now()) @updatedAt
   createdAt DateTime @default(now())
 }
+
+model CarrinhosAbandonados {
+  @@map("SoleTerra_CarrinhosAbandonados")
+  id              Int       @id @default(autoincrement())
+  cartId          String    @unique // ID do carrinho na Yampi
+  token           String    // Token único do carrinho
+  clienteEmail    String?   // Email do cliente pode ser nulo em carrinhos anônimos
+  clienteNome     String?   // Nome do cliente pode ser nulo em carrinhos anônimos
+  clienteTelefone String?   // Telefone do cliente pode ser nulo
+  valorTotal      Float     // Valor total do carrinho
+  valorSubtotal   Float     // Valor subtotal (sem descontos/frete)
+  valorFrete      Float     // Valor do frete
+  valorDesconto   Float     // Valor total de descontos
+  quantidadeItens Int       // Quantidade total de itens
+  produtos        Json      // Array com os produtos do carrinho
+  utm_source      String?   // Origem do tráfego
+  utm_medium      String?   // Meio de aquisição
+  utm_campaign    String?   // Campanha
+  tipoCarrinho    String    @default("abandonado") // Tipo do carrinho: "abandonado" ou "nao_pago"
+  status          String?   // Status do carrinho (ex: "pendente", "cancelado", "expirado") - usado principalmente para carrinhos não pagos
+  dataExpiracao   DateTime? // Data de expiração do carrinho - usado principalmente para carrinhos não pagos
+  recuperado      Boolean   @default(false) // Status de recuperação do carrinho
+  observacoes     String?   @db.Text // Observações do atendente (campo longo)
+  ultimaAtividade DateTime  // Data da última atividade no carrinho
+  createdAt       DateTime  @default(now()) // Data de criação do registro
+  updatedAt       DateTime  @updatedAt // Data de atualização do registro
+}
+
+model PedidosNaoPagos {
+  id              Int      @id @default(autoincrement())
+  pedidoId        String   @unique
+  token           String?
+  clienteEmail    String?
+  clienteNome     String?
+  clienteTelefone String?
+  valorTotal      Float
+  valorSubtotal   Float
+  valorFrete      Float
+  valorDesconto   Float
+  quantidadeItens Int
+  produtos        Json
+  utm_source      String?
+  utm_medium      String?
+  utm_campaign    String?
+  status          String   @default("pendente")
+  createdAt       DateTime @default(now())
+  ultimaAtividade DateTime @updatedAt
+
+  @@map("pedidos_nao_pagos")
+}

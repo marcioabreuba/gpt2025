@@ -1,3 +1,17 @@
 ### Teste de GET Orders
 POST http://localhost:3000/api/pedidos
 Content-Type: application/json
+
+### Teste de GET Carrinhos
+GET http://localhost:3000/api/callcenter/sincronizar-carrinhos
+Content-Type: application/json
+
+### Teste de GET Carrinhos
+GET http://localhost:3000/api/callcenter/testar-autenticacao
+Content-Type: application/json
+
+### Teste de GET Carrinhos
+GET http://localhost:3000/api/callcenter/carrinhos?tipo=nao_pago
+Content-Type: application/json
+
+
