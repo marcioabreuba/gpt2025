@@ -55,6 +55,7 @@ class VapiService {
                 nome: produto.metadata.content,
                 descricao: produto.metadata.content,
                 preco: produto.metadata.price,
+                precoFormatado: `R$ ${produto.metadata.price}`,
                 disponibilidade: produto.metadata.available ? "Em estoque" : "Fora de estoque",
                 similaridade: produto.score,
                 url: produto.metadata.url
@@ -63,7 +64,15 @@ class VapiService {
             const resposta = {
                 success: true,
                 produto: Produto,
-                produtosEncontrados: produtosFormatados
+                produtosEncontrados: produtosFormatados,
+                resumo: {
+                    totalEncontrado: produtosFormatados.length,
+                    disponiveis: produtosFormatados.filter(p => p.disponibilidade === "Em estoque").length,
+                    faixaPreco: {
+                        menor: Math.min(...produtosFormatados.map(p => parseFloat(p.preco))),
+                        maior: Math.max(...produtosFormatados.map(p => parseFloat(p.preco)))
+                    }
+                }
             };
 
             console.log('=== RESPOSTA QUE A VAPI RECEBERÁ ===');
