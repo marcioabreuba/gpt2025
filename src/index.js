@@ -43,7 +43,7 @@ import ordersRoutes from './routes/orders.js';
 import pedidosRoutes from './routes/api/pedidos.js';
 import produtosRoutes from './routes/api/produtos.js';
 import trueRoutes from './routes/api/true.js';
-import callcenterRoutes from './routes/api/callcenter/buscarpedidos.js';
+import callcenterRoutes from './routes/api/callcenter/index.js';
 import carrinhoAbandonadoRoutes from './routes/api/callcenter/carrinhoAbandonadoRota.js';
 
 // Inicialização do Express
