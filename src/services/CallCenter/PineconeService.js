@@ -34,18 +34,25 @@ class PineconeService {
 
             const results = await this.index.query(searchParams);
             
-            const produtosFiltrados = results.matches
+            // Filtrar produtos únicos por ID
+            const produtosUnicos = new Map();
+            results.matches
                 .filter(match => match.score > 0.5)
-                .map(match => ({
-                    score: match.score,
-                    metadata: match.metadata
-                }));
+                .forEach(match => {
+                    const productId = match.metadata.productId;
+                    if (productId && (!produtosUnicos.has(productId) || match.score > produtosUnicos.get(productId).score)) {
+                        produtosUnicos.set(productId, {
+                            score: match.score,
+                            metadata: match.metadata
+                        });
+                    }
+                });
 
-            console.log(`Encontrados ${produtosFiltrados.length} produtos similares para: ${nomeProduto}`);
+            console.log(`Encontrados ${produtosUnicos.size} produtos únicos similares para: ${nomeProduto}`);
             
             // Buscar detalhes dos produtos únicos
             const produtosComDetalhes = await Promise.all(
-                produtosFiltrados.map(async (produto) => {
+                Array.from(produtosUnicos.values()).map(async (produto) => {
                     if (produto.metadata.productId) {
                         // Verificar se já temos o produto no cache
                         if (this.cache.has(produto.metadata.productId)) {
@@ -58,6 +65,7 @@ class PineconeService {
                             };
                         }
 
+                        console.log(`Buscando produto com ID: ${produto.metadata.productId}`);
                         const detalhes = await buscarProdutoPorId(produto.metadata.productId);
                         if (detalhes) {
                             const detalhesProduto = {
