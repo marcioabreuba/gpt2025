@@ -1,6 +1,7 @@
 import { Pinecone } from '@pinecone-database/pinecone';
 import config from '../../config.js';
 import embeddingText from '../embeddingText.js';
+import { buscarProdutoPorId } from '../shopifyService.js';
 
 class PineconeService {
     constructor() {
@@ -11,7 +12,6 @@ class PineconeService {
     async initialize() {
         try {
             this.index = await this.pc.index(this.indexName);
-            console.log('Pinecone inicializado com sucesso');
         } catch (error) {
             console.error('Erro ao inicializar Pinecone:', error);
             throw error;
@@ -24,11 +24,7 @@ class PineconeService {
                 await this.initialize();
             }
 
-            // Gerar embedding do texto
-            console.log('Gerando embedding para:', nomeProduto);
             const embedding = await embeddingText(nomeProduto);
-
-            // Buscar produtos similares no Pinecone
             const searchParams = {
                 vector: embedding,
                 topK: 5,
@@ -37,7 +33,6 @@ class PineconeService {
 
             const results = await this.index.query(searchParams);
             
-            // Filtrar resultados com score acima de 0.5
             const produtosFiltrados = results.matches
                 .filter(match => match.score > 0.5)
                 .map(match => ({
@@ -47,7 +42,27 @@ class PineconeService {
 
             console.log(`Encontrados ${produtosFiltrados.length} produtos similares para: ${nomeProduto}`);
             
-            return produtosFiltrados;
+            const produtosComDetalhes = await Promise.all(
+                produtosFiltrados.map(async (produto) => {
+                    if (produto.metadata.productId) {
+                        const detalhes = await buscarProdutoPorId(produto.metadata.productId);
+                        if (detalhes) {
+                            return {
+                                ...produto,
+                                metadata: {
+                                    ...produto.metadata,
+                                    price: detalhes.price,
+                                    available: true,
+                                    url: detalhes.public_url
+                                }
+                            };
+                        }
+                    }
+                    return produto;
+                })
+            );
+            
+            return produtosComDetalhes;
         } catch (error) {
             console.error('Erro ao buscar produtos similares:', error);
             throw error;
