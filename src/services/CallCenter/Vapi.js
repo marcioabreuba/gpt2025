@@ -50,11 +50,15 @@ class VapiService {
                 url: produto.metadata.url
             }));
 
-            return {
+            const resposta = {
                 success: true,
                 produto: Produto,
                 produtosEncontrados: produtosFormatados
             };
+
+            console.log('Informações do produto enviadas para a Vapi:', JSON.stringify(resposta, null, 2));
+            
+            return resposta;
         } catch (error) {
             console.error('Erro ao buscar produtos:', error);
             return {
