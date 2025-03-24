@@ -56,15 +56,22 @@ class VapiService {
                 produtosEncontrados: produtosFormatados
             };
 
-            console.log('Informações do produto enviadas para a Vapi:', JSON.stringify(resposta, null, 2));
+            const respostaString = JSON.stringify(resposta);
+            console.log('=== RESPOSTA QUE A VAPI RECEBERÁ ===');
+            console.log(respostaString);
+            console.log('=====================================');
             
-            return resposta;
+            return respostaString;
         } catch (error) {
             console.error('Erro ao buscar produtos:', error);
-            return {
+            const erroString = JSON.stringify({
                 success: false,
                 error: error.message
-            };
+            });
+            console.log('=== ERRO QUE A VAPI RECEBERÁ ===');
+            console.log(erroString);
+            console.log('=====================================');
+            return erroString;
         }
     }
 }
