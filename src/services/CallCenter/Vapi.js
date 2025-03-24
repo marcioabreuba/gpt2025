@@ -40,7 +40,7 @@ class VapiService {
             console.log('Iniciando busca de produtos no serviço Vapi:', requisicao.message.toolCalls[0].function.arguments);
 
             // Extrair o nome do produto da requisição
-            const { Produto } = JSON.parse(requisicao.message.toolCalls[0].function.arguments);
+            const { Produto } = requisicao.message.toolCalls[0].function.arguments;
 
             // Buscar produtos similares no Pinecone
             const produtosSimilares = await PineconeService.buscarProdutosSimilares(Produto);
