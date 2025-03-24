@@ -17,14 +17,24 @@ class VapiService {
 
             const pedidos = await buscarPedidos(CPF);
             return {
-                success: true,
-                pedidos
+                results: [{
+                    toolCallId: toolCall.id,
+                    result: JSON.stringify({
+                        success: true,
+                        pedidos
+                    })
+                }]
             };
         } catch (error) {
             console.error('Erro ao processar pedido:', error);
             return {
-                success: false,
-                error: error.message
+                results: [{
+                    toolCallId: toolCall.id,
+                    result: JSON.stringify({
+                        success: false,
+                        error: error.message
+                    })
+                }]
             };
         }
     }
@@ -56,22 +66,41 @@ class VapiService {
                 produtosEncontrados: produtosFormatados
             };
 
-            const respostaString = JSON.stringify(resposta);
             console.log('=== RESPOSTA QUE A VAPI RECEBERÁ ===');
-            console.log(respostaString);
+            console.log(JSON.stringify({
+                results: [{
+                    toolCallId: toolCall.id,
+                    result: JSON.stringify(resposta)
+                }]
+            }, null, 2));
             console.log('=====================================');
             
-            return respostaString;
+            return {
+                results: [{
+                    toolCallId: toolCall.id,
+                    result: JSON.stringify(resposta)
+                }]
+            };
         } catch (error) {
             console.error('Erro ao buscar produtos:', error);
-            const erroString = JSON.stringify({
+            const erro = {
                 success: false,
                 error: error.message
-            });
+            };
             console.log('=== ERRO QUE A VAPI RECEBERÁ ===');
-            console.log(erroString);
+            console.log(JSON.stringify({
+                results: [{
+                    toolCallId: toolCall.id,
+                    result: JSON.stringify(erro)
+                }]
+            }, null, 2));
             console.log('=====================================');
-            return erroString;
+            return {
+                results: [{
+                    toolCallId: toolCall.id,
+                    result: JSON.stringify(erro)
+                }]
+            };
         }
     }
 }
