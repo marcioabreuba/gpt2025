@@ -533,8 +533,14 @@ export async function getChat(userId, phone, message, imageUrl, caption = '', is
           // Lista de ferramentas ativas para esta chamada
           let activeTools = [];
 
+          // ** CORREÇÃO: Verificar a intenção com base nas mensagens de texto disponíveis **
+          let messageContentToCheck = "";
+          if (textMessages.length > 0) {
+            messageContentToCheck = textMessages.join("\n\n"); // Usa o conteúdo das mensagens de texto
+          }
+
           // Adiciona a ferramenta get_orders_info SOMENTE se a regex encontrar correspondência na mensagem
-          if (orderPromptRegex.test(consolidatedMessage)) {
+          if (messageContentToCheck && orderPromptRegex.test(messageContentToCheck)) {
               console.log("Intenção de pedido detectada. Habilitando a ferramenta get_orders_info.");
               activeTools.push(getOrdersInfoToolDefinition);
           } else {
