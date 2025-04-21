@@ -498,8 +498,55 @@ export async function getChat(userId, phone, message, imageUrl, caption = '', is
 
         // Executa interação com OpenAI apenas se houver mensagens de texto ou imagem
         if (textMessages.length > 0 || imageProcessed) {
+          
+          // Definição da ferramenta get_orders_info (fornecida pelo usuário)
+          const getOrdersInfoToolDefinition = {
+            "name": "get_orders_info",
+            "description": "Obtém status de pedido. Só use se o cliente fornecer #pedido (4‑8 dígitos) **OU** CPF (11 dígitos) e mencionar pedido/rastreio.",
+            "strict": false, // Mantendo o strict: false conforme fornecido, mas considere true se quiser validação mais rigorosa pela OpenAI
+            "parameters": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "order_number": {
+                  "type": "string",
+                  "pattern": "^#?\\d{4,8}$", // Escapado para string JS
+                  "description": "Número do pedido (ex: 1234, #567890)"
+                },
+                "cpf": {
+                  "type": "string",
+                  "pattern": "^\\d{11}$", // Escapado para string JS
+                  "description": "CPF do cliente (11 dígitos, ex: 12345678900)"
+                }
+              },
+              "anyOf": [
+                { "required": ["order_number"] },
+                { "required": ["cpf"] }
+              ],
+              "required": [] // Mantendo required vazio no nível superior conforme fornecido
+            }
+          };
+
+          // Regex para detectar intenção de pedido
+          const orderPromptRegex = /(pedido|rastreio|tracking|status|#\d{4,8}|\b\d{11}\b)/i; // Escapado para string JS
+
+          // Lista de ferramentas ativas para esta chamada
+          let activeTools = [];
+
+          // Adiciona a ferramenta get_orders_info SOMENTE se a regex encontrar correspondência na mensagem
+          if (orderPromptRegex.test(consolidatedMessage)) {
+              console.log("Intenção de pedido detectada. Habilitando a ferramenta get_orders_info.");
+              activeTools.push(getOrdersInfoToolDefinition);
+          } else {
+              console.log("Nenhuma intenção de pedido detectada. A ferramenta get_orders_info NÃO será oferecida.");
+          }
+
+          // Adicione aqui outras ferramentas que devam estar sempre ativas ou baseadas em outras condições, se houver.
+          // Ex: const getProductsTool = { ... }; activeTools.push(getProductsTool);
+
           const run = await openai.beta.threads.runs.create(threadId, { 
-            assistant_id: config.openai.assistantId 
+            assistant_id: config.openai.assistantId,
+            tools: activeTools // Passa a lista dinâmica de ferramentas
           });
           
           const runResult = await waitForRunCompletion(threadId, run.id);
