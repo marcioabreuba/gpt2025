@@ -542,7 +542,11 @@ export async function getChat(userId, phone, message, imageUrl, caption = '', is
           // Adiciona a ferramenta get_orders_info SOMENTE se a regex encontrar correspondência na mensagem
           if (messageContentToCheck && orderPromptRegex.test(messageContentToCheck)) {
               console.log("Intenção de pedido detectada. Habilitando a ferramenta get_orders_info.");
-              activeTools.push(getOrdersInfoToolDefinition);
+              // ** CORREÇÃO: Envolver a definição da ferramenta na estrutura esperada pela API **
+              activeTools.push({ 
+                type: "function", 
+                function: getOrdersInfoToolDefinition 
+              });
           } else {
               console.log("Nenhuma intenção de pedido detectada. A ferramenta get_orders_info NÃO será oferecida.");
           }
