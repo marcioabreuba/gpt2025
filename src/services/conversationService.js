@@ -503,27 +503,23 @@ export async function getChat(userId, phone, message, imageUrl, caption = '', is
           const getOrdersInfoToolDefinition = {
             "name": "get_orders_info",
             "description": "Obtém status de pedido. Só use se o cliente fornecer #pedido (4‑8 dígitos) **OU** CPF (11 dígitos) e mencionar pedido/rastreio.",
-            "strict": false, // Mantendo o strict: false conforme fornecido, mas considere true se quiser validação mais rigorosa pela OpenAI
+            "strict": false,
             "parameters": {
               "type": "object",
-              "additionalProperties": false,
+              //"additionalProperties": false, 
               "properties": {
                 "order_number": {
                   "type": "string",
-                  "pattern": "^#?\\d{4,8}$", // Escapado para string JS
-                  "description": "Número do pedido (ex: 1234, #567890)"
+                  "pattern": "^#?\\d{4,8}$",
+                  "description": "Número do pedido (4-8 dígitos, ex: 1234, #567890). Extrair SOMENTE se o usuário fornecer explicitamente."
                 },
                 "cpf": {
                   "type": "string",
-                  "pattern": "^\\d{11}$", // Escapado para string JS
-                  "description": "CPF do cliente (11 dígitos, ex: 12345678900)"
+                  "pattern": "^\\d{11}$",
+                  "description": "CPF do cliente (11 dígitos, ex: 12345678900). Extrair SOMENTE se o usuário fornecer explicitamente."
                 }
               },
-              "anyOf": [
-                { "required": ["order_number"] },
-                { "required": ["cpf"] }
-              ],
-              "required": [] // Mantendo required vazio no nível superior conforme fornecido
+              "required": [] 
             }
           };
 
