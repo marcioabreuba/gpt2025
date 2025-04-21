@@ -523,13 +523,47 @@ export async function getChat(userId, phone, message, imageUrl, caption = '', is
             }
           };
 
+          // Definição da ferramenta get_products_info (fornecida pelo usuário)
+          const getProductsInfoToolDefinition = {
+            "name": "get_products_info",
+            "description": "Retorna um array com os nomes dos produtos encontrados na mensagem da loja Shopify",
+            "strict": true,
+            "parameters": {
+              "type": "object",
+              "required": [
+                "endpoint",
+                "nomes_produtos"
+              ],
+              "properties": {
+                "endpoint": {
+                  "type": "string",
+                  "description": "O endpoint para obter as informações sobre os produtos"
+                },
+                "nomes_produtos": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "description": "Array com os nomes dos produtos encontrados na mensagem"
+                }
+              },
+              "additionalProperties": false
+            }
+          };
+
           // Regex para detectar intenção de pedido
           const orderPromptRegex = /(pedido|rastreio|tracking|status|#\d{4,8}|\b\d{11}\b)/i; // Escapado para string JS
 
           // Lista de ferramentas ativas para esta chamada
           let activeTools = [];
 
-          // ** CORREÇÃO: Verificar a intenção com base nas mensagens de texto disponíveis **
+          // ** SEMPRE adicionar get_products_info **
+          activeTools.push({ 
+            type: "function", 
+            function: getProductsInfoToolDefinition 
+          });
+
+          // ** Adicionar get_orders_info SOMENTE se a regex encontrar correspondência **
           let messageContentToCheck = "";
           if (textMessages.length > 0) {
             messageContentToCheck = textMessages.join("\n\n"); // Usa o conteúdo das mensagens de texto
@@ -538,7 +572,7 @@ export async function getChat(userId, phone, message, imageUrl, caption = '', is
           // Adiciona a ferramenta get_orders_info SOMENTE se a regex encontrar correspondência na mensagem
           if (messageContentToCheck && orderPromptRegex.test(messageContentToCheck)) {
               console.log("Intenção de pedido detectada. Habilitando a ferramenta get_orders_info.");
-              // ** CORREÇÃO: Envolver a definição da ferramenta na estrutura esperada pela API **
+              // Envolver a definição da ferramenta na estrutura esperada pela API
               activeTools.push({ 
                 type: "function", 
                 function: getOrdersInfoToolDefinition 
